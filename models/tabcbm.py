@@ -1,19 +1,9 @@
-"""
-
-Module containing our Tabular Concept Bottleneck
-implementation.
-
-"""
 
 import concepts_xai.evaluation.metrics.completeness as completeness
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
 import scipy
-
-################################################################################
-## Helper Functions
-################################################################################
 
 def log(x): 
     return tf.math.log(x + 1e-6)
@@ -31,10 +21,6 @@ def copula_generation(X, batch_size):
     g = np.matmul(L, epsilon)
     return g.T
 
-################################################################################
-## Main Model
-################################################################################
-
 class TabCBM(tf.keras.Model):
     """
     TODO
@@ -42,19 +28,26 @@ class TabCBM(tf.keras.Model):
 
     def __init__(
         self,
-        self_supervised_mode,
         features_to_concepts_model,
         concepts_to_labels_model,
         latent_dims,
         n_concepts,
-        cov_mat,
         mean_inputs,
+        cov_mat=None,
         n_exclusive_concepts=0,
+        n_supervised_concepts=0,
+        
+        self_supervised_mode=False,
+        # For legacy models set this to True
+        force_generator_inclusion=True,
         g_model=None,
         self_supervised_selection_prob=None,
         gate_estimator_weight=1,
+        include_bn=False,
+        
         threshold=0.5,
         loss_fn=tf.keras.losses.sparse_categorical_crossentropy,
+        
         top_k=32,
         temperature=1,
         coherence_reg_weight=0.1,
@@ -62,15 +55,21 @@ class TabCBM(tf.keras.Model):
         prob_diversity_reg_weight=0.1,
         contrastive_reg_weight=0.1,
         feature_selection_reg_weight=1,
+        concept_prediction_weight=0,
+
         seed=None,
         eps=1e-5,
         end_to_end_training=False,
         acc_metric=None,
-        initial_mask_probability=0.2,
         normalized_scores=True,
+        use_concept_embedding=False,
+        concept_generator_units=[64], #[100, 100]
+        rec_model_units=[64], # [100, 100, 100]
+        prior_masks=None, # If provided, it must have as many elements as concepts
+        concept_generators=None,
         **kwargs,
     ):
-        super(TabCBM, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         
         # Set initial state from parameters
         self.normalized_scores = normalized_scores
@@ -80,6 +79,13 @@ class TabCBM(tf.keras.Model):
         self.eps = eps
         self.threshold = threshold
         self.n_concepts = n_concepts
+        self.n_supervised_concepts = n_supervised_concepts
+        assert self.n_supervised_concepts <= self.n_concepts, (
+            f"We were indicated that {self.n_supervised_concepts} concepts "
+            f"will be given for supervision yet we only are learning a total "
+            f"of {self.n_concepts} concepts. We cannot supervise more concepts "
+            f"than the number of concepts we learn/extract."
+        )
         self.n_exclusive_concepts = n_exclusive_concepts
         self.loss_fn = loss_fn
         self.top_k = top_k
@@ -90,8 +96,11 @@ class TabCBM(tf.keras.Model):
         self.diversity_reg_weight = diversity_reg_weight
         self.contrastive_reg_weight = contrastive_reg_weight
         self.feature_selection_reg_weight = feature_selection_reg_weight
+        self.concept_prediction_weight = concept_prediction_weight
+        
         self.latent_dims = latent_dims
         self.end_to_end_training = end_to_end_training
+        self.use_concept_embedding = use_concept_embedding
         input_shape = self.features_to_concepts_model.inputs[0].shape[1:]
         self.self_supervised_selection_prob = self.add_weight(
             name=f"ss_probability_vector",
@@ -99,8 +108,8 @@ class TabCBM(tf.keras.Model):
             dtype=tf.float32,
             initializer=tf.keras.initializers.RandomUniform(
                 minval=0.4,
-                maxval=0.6, #0.8,
-            ), #tf.constant_initializer(initial_mask_probability),
+                maxval=0.6,
+            ),
             trainable=False,
         )
         
@@ -109,12 +118,14 @@ class TabCBM(tf.keras.Model):
         self.g_model = g_model
         if self.g_model is None:
             self.g_model = completeness._get_default_model(
-                num_concepts=n_concepts,
-                num_hidden_acts=latent_dims,
+                num_concepts=(
+                    (n_concepts * (self.latent_dims//2)) if self.use_concept_embedding
+                    else n_concepts
+                ),
+                num_hidden_acts=self.latent_dims,
             )
 
-        assert len(input_shape) == 1, \
-            f'Expected a 1D input yet we got shape {input_shape}'
+        assert len(input_shape) == 1, f'Expected a 1D input yet we got shape {input_shape}'
 
         # Setup our metrics
         self.metric_names = [
@@ -128,10 +139,13 @@ class TabCBM(tf.keras.Model):
             "prob_diversity_loss",
             "avg_mask_rec_loss",
             "avg_features_rec_loss",
+            "avg_concept_size",
             "max_probability",
             "min_probability",
             "mean_probability",
         ]
+        if self.n_supervised_concepts != 0:
+            self.metric_name.append("avg_concept_prediction")
         self.metrics_dict = {
             name: tf.keras.metrics.Mean(name=name)
             for name in self.metric_names
@@ -148,10 +162,22 @@ class TabCBM(tf.keras.Model):
         
         # And we will initialize some models to generate concept vectors
         # from the masked input features
-        self.cov_mat = cov_mat
-        self.L = scipy.linalg.cholesky(self.cov_mat, lower=True).astype(np.float32)
+        if cov_mat is not None:
+            self.cov_mat = cov_mat
+        else:
+            # else we assume all concepts are independent of each other
+            print("[WARNING] Assuming independence between features in TabCBM training.")
+            self.cov_mat = np.eye(input_shape[-1], dtype=np.float32)
+        try:
+            self.L = scipy.linalg.cholesky(self.cov_mat, lower=True).astype(np.float32)
+        except:
+            # Else, if it is not decomposable, assume full independence
+            print("[WARNING] Assuming independence between features in TabCBM training.")
+            self.cov_mat = np.eye(input_shape[-1], dtype=np.float32)
+            self.L = scipy.linalg.cholesky(self.cov_mat, lower=True).astype(np.float32)
         self.mean_inputs = mean_inputs
-        self.concept_generators = []
+        given = concept_generators is not None
+        self.concept_generators = concept_generators or []
         self.rec_values_models = []
         self.rec_mask_models = []
         for i in range(self.n_concepts):
@@ -159,87 +185,101 @@ class TabCBM(tf.keras.Model):
             # the masked input to the concept's input latent space. This will
             # then used to produce a score for the input of interest for
             # each concept
-            self.concept_generators.append(
-                tf.keras.models.Sequential(
-                    [
-                        tf.keras.layers.Dense(
-                            100,
-                            activation='relu'
-                        ),
-                        tf.keras.layers.Dense(
-                            100,
-                            activation='relu'
-                        ),
-                        tf.keras.layers.Dense(
-                            self.latent_dims,
-                            activation=None,
-                        ),
-                    ],
-                    name=f"concept_generators_{i}",
+            if not given:
+                layers = [
+                    tf.keras.layers.Dense(
+                        acts,
+                        activation='relu'
+                    )
+                    for acts in concept_generator_units
+                ]
+                layers += [
+                    tf.keras.layers.Dense(
+                        self.latent_dims,
+                        activation=None,
+                    ),
+                ]
+
+                if include_bn:
+                    # Then include a batch normalization layer at the begining
+                    layers = [tf.keras.layers.BatchNormalization(
+                        axis=-1,
+                        momentum=0.99,
+                        epsilon=0.001,
+                        center=False,
+                        scale=False,
+                    )] + layers
+                self.concept_generators.append(
+                    tf.keras.models.Sequential(
+                        layers,
+                        name=f"concept_generators_{i}",
+                    )
                 )
-            )
-            self.concept_generators[-1].compile()
+                self.concept_generators[-1].compile()
             
+            if (prior_masks is None) or (prior_masks[i] is None):
+                # Then we randomly initialize the logits
+                initial_mask = tf.keras.initializers.RandomUniform(
+                    minval=-1,
+                    maxval=1,
+                )
+            else:
+                # otherwise a prior has been imposed so let's take advantage
+                # of it!
+                initial_mask = prior_masks[i]
             self.feature_probabilities = self.add_weight(
                 name=f"probability_vector_logits",
                 shape=(self.n_concepts, input_shape[-1],),
                 dtype=tf.float32,
-                initializer=tf.keras.initializers.RandomUniform(
-                    minval=-1,
-                    maxval=1,
-                ),
+                initializer=initial_mask,
                 trainable=True,
             )
             
-            # Initialize the mask and value reconstruction models which
-            # will be in charge of reconstructing the input from its
-            # masked version
-            self.rec_values_models.append(tf.keras.models.Sequential(
-                [
-                    tf.keras.layers.Dense(
-                        100,
-                        activation='relu'
+            # TODO: Make this conditional on self_supervised mode to avoid loading the
+            #       entire model if we are not using these mask generators
+            if self_supervised_mode or force_generator_inclusion:
+                # Initialize the mask and value reconstruction models which will be in charge
+                # of reconstructing the input from its masked version
+                self.rec_values_models.append(tf.keras.models.Sequential(
+                    (
+                        [
+                            tf.keras.layers.Dense(
+                                acts,
+                                activation='relu'
+                            )
+                            for acts in rec_model_units
+                        ] + 
+                        [
+                            tf.keras.layers.Dense(
+                                input_shape[-1],
+                                activation=None,
+                            ),
+                        ]
                     ),
-                    tf.keras.layers.Dense(
-                        100,
-                        activation='relu'
-                    ),
-                    tf.keras.layers.Dense(
-                        100,
-                        activation='relu'
-                    ),
-                    tf.keras.layers.Dense(
-                        input_shape[-1],
-                        activation=None,
-                    ),
-                ],
-                name=f"rec_values_model_{i}",
-            ))
-            self.rec_values_models[-1].compile()
-            
-            self.rec_mask_models.append(tf.keras.models.Sequential(
-                [
-                    tf.keras.layers.Dense(
-                        100,
-                        activation='relu'
-                    ),
-                    tf.keras.layers.Dense(
-                        100,
-                        activation='relu'
-                    ),
-                    tf.keras.layers.Dense(
-                        100,
-                        activation='relu'
-                    ),
-                    tf.keras.layers.Dense(
-                        input_shape[-1],
-                        # The sigmoid will be implicit in the loss function
-                        activation=None,
-                    ),
-                ],
-                name="rec_mask_model",
-            ))
-            self.rec_mask_models[-1].compile()
+                    name=f"rec_values_model_{i}",
+                ))
+                self.rec_values_models[-1].compile()
+
+                layers = (
+                    [
+                        tf.keras.layers.Dense(
+                            acts,
+                            activation='relu'
+                        )
+                        for acts in rec_model_units
+                    ] + 
+                    [
+                        tf.keras.layers.Dense(
+                            input_shape[-1],
+                            activation=None,  # The sigmoid will be implicit in the loss function
+                        ),
+                    ]
+                )
+                self.rec_mask_models.append(tf.keras.models.Sequential(
+                    layers,
+                    name="rec_mask_model",
+                ))
+                self.rec_mask_models[-1].compile()
                 
     @property
     def metrics(self):
@@ -250,16 +290,14 @@ class TabCBM(tf.keras.Model):
             self.metrics_dict[loss_name].update_state(loss)
     
     def _multi_bernoulli_sample(self, pi, shape):
-        # Sample from a standard Gaussian first to perform the
-        # reparameterization trick
+        # Sample from a standard Gaussian first to perform the reparameterization trick
         epsilon = tf.random.normal(shape, 0, 1)
         v = tf.transpose(tf.linalg.matmul(self.L, epsilon))
         u = Gaussian_CDF(v)
         return tf.cast(u <= pi, tf.float32)
     
     def _relaxed_multi_bernoulli_sample(self, pi, shape):
-        # Sample from a standard Gaussian first to perform the
-        # reparameterization trick
+        # Sample from a standard Gaussian first to perform the reparameterization trick
         epsilon = tf.random.normal(shape, 0, 1)
         epsilon = tf.debugging.check_numerics(epsilon, "y_pred has nan!")
         v = tf.transpose(tf.linalg.matmul(self.L, epsilon))
@@ -267,18 +305,8 @@ class TabCBM(tf.keras.Model):
         u = Gaussian_CDF(v)    
         u = tf.debugging.check_numerics(u, "u has nan!")
         return tf.nn.sigmoid(
-            1.0 / self.temperature * (
-                log(pi) - log(1. - pi) + log(u) - log(1. - u)
-            )
+            1.0/self.temperature * (log(pi) - log(1. - pi) + log(u) - log(1. - u))
         )
-        # TESTING TO SEE WHAT HAPPENS IF WE DO HARD THRESHOLDING
-#         return tf.cast(u <= pi, tf.float32)
-#         tf.cast(
-#             tf.nn.sigmoid(
-#                 1.0/self.temperature * (log(pi) - log(1. - pi) + log(u) - log(1. - u))
-#             ) >= 0.5,
-#             tf.float32,
-#         )
 
     def mask_features(self, x):
         masked_xs = []
@@ -306,29 +334,107 @@ class TabCBM(tf.keras.Model):
             masked_xs,
         ):
             # This will be a sample of size [B, latent_dims]
-            concept_vectors.append(
-                tf.debugging.check_numerics(
-                    concept_generator(masked_x),
-                    f"concept_generator_{len(concept_vectors)} has nan"
-                )
-            )
+            concept_vectors.append(concept_generator(masked_x))
             
         # We need to stack them all in the first dimension so that
         # we obtain a variable with size [B, n_concepts, latent_dims]
         return tf.stack(concept_vectors, axis=1), masked_xs
-
-    def concept_scores(self, x, compute_reg_terms=False):
+    
+    def _emb_concept_scores(self, x, compute_reg_terms=False):
         # First we compute the concept matrix
-        concept_matrix, masked_xs = self.compute_concept_matrix(x) # [B, n_concepts, latent_dims]
-        concept_matrix = tf.debugging.check_numerics(
-            concept_matrix,
-            "concept_matrix has nan!",
+        concept_matrix, masked_xs = self.compute_concept_matrix(x) # Shape: [B, n_concepts, latent_dims]
+        concept_matrix_norm = tf.math.l2_normalize(concept_matrix, axis=1) # Shape: [B, n_concepts, latent_dims]
+        
+        # Then for each concept, we have a corresponding masked inputs which we will pass through
+        # the feature to concepts model (which cannot be trained)
+        concept_probs = []
+        bottleneck_acts = []
+        concept_prob_norms = []
+        
+        for i, masked_x in enumerate(masked_xs):
+            latent = self.features_to_concepts_model(masked_x)  # Shape: [B, latent_dims]
+            latent_norm = tf.math.l2_normalize(latent, axis=-1) # Shape: [B, latent_dims]
+            
+            # Compute the concept probability scores
+            concept_prob = tf.sigmoid(tf.squeeze(
+                tf.matmul(
+                    concept_matrix_norm[:, i:(i+1), :],  # [B, 1, latent_dim]
+                    tf.expand_dims(latent, axis=-1),  # [B, latent_dim, 1]
+                ),
+                axis=-1,
+            )) # Shape: [B, 1]
+            concept_probs.append(concept_prob)
+            broad_prob = tf.expand_dims(concept_prob, axis=-1) # Shape: [B, 1, 1]
+            # Add in the bottleneck the linear combination of the two semantic embeddings
+            bottleneck_acts.append(
+                broad_prob * concept_matrix_norm[:, i:(i+1), concept_matrix_norm.shape[-1]//2:] + 
+                (1 - broad_prob) * concept_matrix_norm[:, i:(i+1), :concept_matrix_norm.shape[-1]//2]
+            ) # Shape: [B, 1, latent_dims//2]
+            concept_prob_norm = tf.sigmoid(tf.squeeze(
+                tf.matmul(
+                    concept_matrix_norm[:, i:(i+1), :],  # [B, 1, latent_dim]
+                    tf.expand_dims(latent_norm, axis=-1),  # [B, latent_dim, 1
+                ),
+                axis=-1,
+            )) # Shape: [B, 1]
+            concept_prob_norms.append(concept_prob_norm)
+        concept_prob = tf.concat(concept_probs, axis=1) # Shape: [B, n_concepts]
+        bottleneck = tf.concat(bottleneck_acts, axis=1) # Shape: [B, n_concepts, latent_dim//2]
+        bottleneck = tf.reshape(bottleneck, [tf.shape(bottleneck)[0], -1]) # Shape: [B, n_concepts * (latent_dim//2)]
+        concept_prob_norm = tf.concat(concept_prob_norms, axis=1) # Shape: [B, n_concepts]
+
+        if not compute_reg_terms:
+            return concept_prob, bottleneck
+
+        # Compute the regularization loss terms
+        reshaped_concept_probs = tf.transpose(concept_prob_norm) # Shape: [n_concepts, B]
+        completement_shape = tf.math.maximum(
+            tf.shape(reshaped_concept_probs)[-1] - self.top_k,
+            0,
         )
-        concept_matrix_norm = tf.math.l2_normalize(concept_matrix, axis=1) # [B, n_concepts, latent_dims]
-        concept_matrix_norm = tf.debugging.check_numerics(
-            concept_matrix_norm,
-            "concept_matrix_norm has nan!",
+
+        reg_loss_closest = tf.reduce_mean(
+            tf.nn.top_k(
+                reshaped_concept_probs,
+                k=tf.math.minimum(
+                    self.top_k,
+                    tf.shape(reshaped_concept_probs)[-1]
+                ),
+                sorted=True,
+            ).values
         )
+        reg_loss_complement = tf.cond(
+            tf.equal(completement_shape, 0),
+            lambda: 0.0,
+            lambda: tf.reduce_mean(
+                -tf.nn.top_k(
+                    -reshaped_concept_probs,
+                    k=completement_shape,
+                    sorted=True,
+                ).values
+            )
+        )
+        reg_loss_similarity = tf.reduce_mean(
+            tf.math.abs(
+                tf.linalg.matmul(
+                    concept_matrix_norm,
+                    tf.transpose(concept_matrix_norm, perm=[0, 2, 1]),
+                ) - tf.expand_dims(tf.eye(self.n_concepts), axis=0)
+            )
+        )
+        
+        return (
+            concept_prob,
+            bottleneck,
+            reg_loss_closest/self.n_concepts,
+            reg_loss_complement/self.n_concepts,
+            reg_loss_similarity/self.n_concepts,
+        )
+    
+    def _concept_scores(self, x, compute_reg_terms=False):
+        # First we compute the concept matrix
+        concept_matrix, masked_xs = self.compute_concept_matrix(x) # Shape: [B, n_concepts, latent_dims]
+        concept_matrix_norm = tf.math.l2_normalize(concept_matrix, axis=1) # Shape: [B, n_concepts, latent_dims]
         
         # Then for each concept, we have a corresponding masked inputs which we will pass through
         # the feature to concepts model (which cannot be trained)
@@ -336,16 +442,8 @@ class TabCBM(tf.keras.Model):
         concept_prob_norms = []
         
         for i, masked_x in enumerate(masked_xs):
-            latent = self.features_to_concepts_model(masked_x)  # [B, latent_dims]
-            latent = tf.debugging.check_numerics(
-                latent,
-                "latent has nan!",
-            )
-            latent_norm = tf.math.l2_normalize(latent, axis=-1) # [B, latent_dims]
-            latent_norm = tf.debugging.check_numerics(
-                latent_norm,
-                "latent_norm has nan!",
-            )
+            latent = self.features_to_concepts_model(masked_x)  # Shape: [B, latent_dims]
+            latent_norm = tf.math.l2_normalize(latent, axis=-1) # Shape: [B, latent_dims]
             
             # Compute the concept probability scores
             concept_prob = tf.squeeze(
@@ -355,10 +453,6 @@ class TabCBM(tf.keras.Model):
                 ),
                 axis=-1,
             ) # Shape: [B, 1]
-            concept_prob = tf.debugging.check_numerics(
-                concept_prob,
-                "concept_prob has nan!",
-            )
             concept_probs.append(concept_prob)
             concept_prob_norm = tf.squeeze(
                 tf.matmul(
@@ -367,13 +461,9 @@ class TabCBM(tf.keras.Model):
                 ),
                 axis=-1,
             ) # Shape: [B, 1]
-            concept_prob_norm = tf.debugging.check_numerics(
-                concept_prob_norm,
-                "concept_prob has nan!",
-            )
             concept_prob_norms.append(concept_prob_norm)
-        concept_prob = tf.concat(concept_probs, axis=1) # [B, n_concepts]
-        concept_prob_norm = tf.concat(concept_prob_norms, axis=1) # [B, n_concepts]
+        concept_prob = tf.concat(concept_probs, axis=1) # Shape: [B, n_concepts]
+        concept_prob_norm = tf.concat(concept_prob_norms, axis=1) # Shape: [B, n_concepts]
         if self.n_exclusive_concepts:
             # Then we will make sure the n_exclusive_concepts first
             # concepts are mutually exclusive via a softmax layer
@@ -409,17 +499,12 @@ class TabCBM(tf.keras.Model):
                 (concept_prob_norm > self.threshold),
                 tf.float32,
             )
-        concept_prob = tf.debugging.check_numerics(concept_prob, "concept_prob in redone has nan!")
 
         if not compute_reg_terms:
-            return concept_prob
+            return concept_prob, concept_prob
 
         # Compute the regularization loss terms
         reshaped_concept_probs = tf.transpose(concept_prob_norm) # Shape: [n_concepts, B]
-        reshaped_concept_probs = tf.debugging.check_numerics(
-            reshaped_concept_probs,
-            "reshaped_concept_probs has nan!",
-        )
         completement_shape = tf.math.maximum(
             tf.shape(reshaped_concept_probs)[-1] - self.top_k,
             0,
@@ -481,11 +566,18 @@ class TabCBM(tf.keras.Model):
         
         return (
             concept_prob,
+            concept_prob, # Bottleneck
             reg_loss_closest/self.n_concepts,
             reg_loss_complement/self.n_concepts,
             reg_loss_similarity/self.n_concepts,
         )
     
+    def concept_scores(self, x, compute_reg_terms=False):
+        if self.use_concept_embedding:
+            return self._emb_concept_scores(x=x, compute_reg_terms=compute_reg_terms)
+        return self._concept_scores(x=x, compute_reg_terms=compute_reg_terms)
+        
+        
     def _compute_self_supervised_loss(self, x):
         total_loss = 0.0
         avg_mask_rec_loss = 0.0
@@ -517,9 +609,7 @@ class TabCBM(tf.keras.Model):
             total_loss += self.gate_estimator_weight * tf.math.reduce_mean(
                 mask_rec_loss
             )
-            avg_mask_rec_loss += self.gate_estimator_weight * tf.math.reduce_mean(
-                mask_rec_loss
-            )
+            avg_mask_rec_loss += self.gate_estimator_weight * tf.math.reduce_mean(mask_rec_loss)
             
             # Try and predict the original values of the sample as well
             features_pred = self.rec_values_models[i](concept_vector)
@@ -536,9 +626,9 @@ class TabCBM(tf.keras.Model):
             ("avg_features_rec_loss", avg_features_rec_loss/self.n_concepts),
         ]
     
-    def _compute_supervised_loss(self, x, y_true, training_decoder=False):
+    def _compute_supervised_loss(self, x, y_true, c_true=None, training_decoder=False):
         # First, compute the concept scores for the given samples
-        scores, reg_loss_closest, reg_loss_complement, reg_loss_similarity = self.concept_scores(
+        scores, bottleneck, reg_loss_closest, reg_loss_complement, reg_loss_similarity = self.concept_scores(
             x,
             compute_reg_terms=True
         )
@@ -546,10 +636,9 @@ class TabCBM(tf.keras.Model):
         # Then predict the labels after reconstructing the activations
         # from the scores via the g model
         y_pred = self.concepts_to_labels_model(
-            self.g_model(scores),
+            self.g_model(bottleneck),
             training=training_decoder,
         )
-        y_pred = tf.debugging.check_numerics(y_pred, "y_pred has nan!")
         # Compute the task loss
         if (len(y_true.shape) == 1) and (y_pred.shape[-1] == 1):
             y_pred = tf.squeeze(y_pred, axis=-1)
@@ -576,6 +665,34 @@ class TabCBM(tf.keras.Model):
             ) - tf.eye(self.n_concepts)
         )
         
+        # It may be the case that we actually get supervision for some of the
+        # concepts!
+        if self.n_supervised_concepts != 0:
+            assert c_true is not None, (
+                "Expected concepts to be provided during training if the "
+                "concept prediction weight is non-zero!"
+            )
+            concept_pred_loss = 0
+            seen_concepts = 0
+            aligned_idx = 0
+            for concept_idx in range(c_true.shape[-1]):
+                if tf.math.reduce_any(tf.math.is_nan(c_true[:, concept_idx])):
+                    # Then this a concept that has not been provided so we will
+                    # ignore it
+                    continue
+                # Else this concept has been provided so it is time to check its value with its assigned
+                # dimension
+                seen_concepts += 1
+                avg_concept_acc += tf.keras.metrics.binary_crossentropy(
+                    tf.cast(c_true[:, concept_idx], tf.float32),
+                    tf.cast(scores[:, aligned_idx], tf.float32),
+                )
+                # And increase the index of aligned dimensions
+                aligned_idx += 1
+            concept_pred_loss = concept_pred_loss / (seen_concepts + 1e-15)
+        else:
+            concept_pred_loss = 0
+        
         # And include them into the total loss
         total_loss = (
             log_prob_loss -
@@ -583,14 +700,40 @@ class TabCBM(tf.keras.Model):
             self.contrastive_reg_weight * reg_loss_complement +
             self.diversity_reg_weight * reg_loss_similarity + 
             self.feature_selection_reg_weight * prob_sparsity_loss +
-            self.prob_diversity_reg_weight * prob_diversity_loss
+            self.prob_diversity_reg_weight * prob_diversity_loss + 
+            self.concept_prediction_weight * concept_pred_loss
         )
         
         # And report all metrics together with the main loss
-        return total_loss, [
+        total_metrics = [
             ("loss", total_loss),
             ("task_loss", log_prob_loss),
             ("accuracy", self._acc_metric(tf.cast(y_true, tf.float32), tf.cast(y_pred, tf.float32))),
+        ]
+        if self.n_supervised_concepts != 0:
+            avg_concept_acc = 0
+            seen_concepts = 0
+            aligned_idx = 0
+            for concept_idx in range(c_true.shape[-1]):
+                if tf.math.reduce_any(tf.math.is_nan(c_true[:, concept_idx])):
+                    # Then this a concept that has not been provided so we will
+                    # ignore it
+                    continue
+                # Else this concept has been provided so it is time to check its value with its assigned
+                # dimension
+                seen_concepts += 1
+                avg_concept_acc += tf.keras.metrics.binary_accuracy(
+                    tf.cast(c_true[:, concept_idx], tf.float32),
+                    tf.cast(scores[:, aligned_idx], tf.float32),
+                )
+                # And increase the index of aligned dimensions
+                aligned_idx += 1
+            
+            total_metrics += [
+                ("concept_pred_loss", concept_pred_loss),
+                ("avg_concept_accuracy", avg_concept_acc/(seen_concepts + 1e-15)),
+            ]
+        total_metrics += [
             ("reg_loss_closest", self.coherence_reg_weight * reg_loss_closest),
             ("reg_loss_complement", self.contrastive_reg_weight * reg_loss_complement),
             ("reg_loss_similarity", self.diversity_reg_weight * reg_loss_similarity),
@@ -599,10 +742,29 @@ class TabCBM(tf.keras.Model):
             ("max_probability", tf.math.reduce_max(tf.nn.sigmoid(self.feature_probabilities))),
             ("min_probability", tf.math.reduce_min(tf.nn.sigmoid(self.feature_probabilities))),
             ("mean_probability", tf.math.reduce_mean(tf.nn.sigmoid(self.feature_probabilities))),
+            (
+                "avg_concept_size",
+                tf.math.reduce_mean(
+                    tf.math.reduce_sum(
+                        tf.cast(
+                            tf.nn.sigmoid(self.feature_probabilities) > 0.5,
+                            tf.float32,
+                        ),
+                        axis=-1,
+                    )
+                )
+            ),
         ]
+        
+        return total_loss, total_metrics
 
     def train_step(self, inputs):
-        x, y = inputs
+        if self.n_supervised_concepts != 0:
+            # Then we expect some sort of concept supervision!
+            x, (y, c) = inputs
+        else:
+            x, y = inputs
+            c = None
         # We first need to make sure that we set our concepts to labels model
         # so that we do not optimize over its parameters
         prev_trainable = self.concepts_to_labels_model.trainable
@@ -620,6 +782,7 @@ class TabCBM(tf.keras.Model):
                 loss, metrics = self._compute_supervised_loss(
                     x,
                     y,
+                    c_true=c,
                     # Only train the decoder if requested by the user
                     training_decoder=self.end_to_end_training,
                 )
@@ -651,24 +814,40 @@ class TabCBM(tf.keras.Model):
         }
 
     def test_step(self, inputs):
-        x, y = inputs
+        if self.n_supervised_concepts != 0:
+            x, (y, c) = inputs
+        else:
+            x, y = inputs
+            c = None
         if self.self_supervise_mode:
             loss, metrics = self._compute_self_supervised_loss(x)
         else:
             loss, metrics = self._compute_supervised_loss(
                 x,
                 y,
+                c_true=c,
                 training_decoder=False,
             )
         return {
             name: val
-            for name, val in metrics
+            for name, val in metrics if (("probability" not in name) and ("avg_concept_size" not in name))
         }
 
     def call(self, x, **kwargs):
-        concept_scores = self.concept_scores(x)
+        concept_scores, bottleneck = self.concept_scores(x)
         predicted_labels = self.concepts_to_labels_model(
-            self.g_model(concept_scores),
+            self.g_model(bottleneck),
+            training=False,
+        )
+        return predicted_labels, concept_scores
+    
+    def intervene(self, x, concepts_intervened, concept_values, **kwargs):
+        concept_scores, bottleneck = self.concept_scores(x)
+        for i, concept_idx in enumerate(concepts_intervened):
+            # Update the specific concept appropriately
+            bottleneck[:, concept_idx] = concept_values[i]
+        predicted_labels = self.concepts_to_labels_model(
+            self.g_model(bottleneck),
             training=False,
         )
         return predicted_labels, concept_scores

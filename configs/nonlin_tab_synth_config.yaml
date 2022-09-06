@@ -1,0 +1,188 @@
+trials: 5
+results_dir: "results/tabular_synth/nonlin_synth"
+dataset: "synth_tab_nonlinear"
+shared_params:
+    # Experiment setup
+    verbosity: 0
+    aggr_key: "{model}"
+    extra_name: ''
+
+    # Model configuration
+    encoder_units: [16, 16]
+    decoder_units: [16]
+    latent_dims: 16
+
+    # Misc Hyperparameters
+    seed: 42
+    eps: 1e-5
+
+    # Training variables
+    batch_size: 1024
+    max_epochs: 1500
+    learning_rate: 1.0E-3
+    patience: 25
+    min_delta: 1.0E-5
+    holdout_fraction: 0.1
+    early_stop_metric: "val_loss"
+    early_stop_mode: "min"
+
+    # Metrics variables
+    cas_step: 10
+
+runs:
+    - model: 'TabCBM'
+      pretrain_epochs: 50
+      self_supervised_train_epochs: 50
+      use_concept_embedding: False
+      end_to_end_training: True
+      coherence_reg_weight: 0.1
+      diversity_reg_weight: 5
+      feature_selection_reg_weight: 5
+      contrastive_reg_weight: 0
+      prob_diversity_reg_weight: 0
+      gate_estimator_weight: 10
+      n_exclusive_concepts: 0
+      zero_mask: True
+      normalized_scores: True
+      temperature: 1
+      top_k: 256
+      n_concepts: "{{n_ground_truth_concepts}}"
+      aggr_key: "{model} (k={n_concepts})"
+      extra_name: "k_{n_concepts}"
+      early_stop_metric: "val_accuracy"
+      early_stop_mode: "max"
+      early_stop_metric_pretrain: "val_loss"
+      early_stop_mode_pretrain: "min"
+      patience: .inf
+
+    - model: 'TabNet'
+      pretrain_epochs: 100
+      n_d: 8
+      n_a: 8
+      n_steps: 3
+      gamma: 1.3
+      momentum: 0.02
+      lambda_sparse: 1.0E-3
+      initial_lr: 0.02
+      decay_rate: 0.9
+      virtual_batch_size: 512
+      decay_step_size: 10
+      pretraining_ratio: 0.8
+      eps: 1.0E-15
+
+    - model: 'TabNet'
+      pretrain_epochs: 100
+      n_d: 64
+      n_a: 64
+      n_steps: 5
+      gamma: 1.5
+      momentum: 0.02
+      lambda_sparse: 1.0E-3
+      initial_lr: 0.02
+      decay_rate: 0.9
+      virtual_batch_size: 512
+      decay_step_size: 10
+      pretraining_ratio: 0.8
+      eps: 1.0E-15
+      extra_name: 'large_long'
+      aggr_key: "{model} Large & Long"
+      patience: 150
+      max_epochs: 1000
+
+    - model: 'MLP'
+
+    - model: 'MLP'
+      aggr_key: "{model} Large"
+      encoder_units: [64, 64, 64]
+      decoder_units: [64, 64]
+      extra_name: "large"
+      mlp_extra_units: [16]
+
+
+    - model: 'XGBoost'
+      extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
+      aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
+      nthread: 6
+      learning_rate: 1.0E-2
+      max_depth: 5
+
+    - model: 'XGBoost'
+      extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
+      aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
+      nthread: 6
+      learning_rate: 1.0E-2
+      max_depth: 10
+
+    - model: 'LightGBM'
+      extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
+      aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
+      nthread: 6
+      learning_rate: 1.0E-2
+      max_depth: 5
+      num_leaves: 32
+      verbosity: -1
+
+    - model: 'LightGBM'
+      extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
+      aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
+      nthread: 6
+      learning_rate: 1.0E-2
+      max_depth: 10
+      num_leaves: 1024
+      verbosity: -1
+
+    - model: 'SENN'
+      pretrain_autoencoder_epochs: 100
+      regularization_strength: 0.1
+      sparsity_strength: 2.0E-5
+      coefficient_model_units: [64, 64]
+      encoder_units: [64, 64, 64]
+      decoder_units: [64, 64]
+      latent_dims: 64
+      patience: 50
+      n_concepts: "{{n_ground_truth_concepts}}"
+      aggr_key: "{model} Large (k={n_concepts})"
+      extra_name: "_large_k_{n_concepts}"
+      early_stop_metric: "val_sparse_top_k_categorical_accuracy"
+      early_stop_mode: "max"
+
+    - model: 'SENN'
+      pretrain_autoencoder_epochs: 100
+      regularization_strength: 0.1
+      sparsity_strength: 2.0E-5
+      coefficient_model_units: [16, 16]
+      patience: 50
+      n_concepts: "{{n_ground_truth_concepts}}"
+      aggr_key: "{model} (k={n_concepts})"
+      extra_name: "k_{n_concepts}"
+      early_stop_metric: "val_sparse_top_k_categorical_accuracy"
+      early_stop_mode: "max"
+
+    - model: 'CCD'
+      pretrain_epochs: 150
+      n_concepts: "{{n_ground_truth_concepts}}"
+      aggr_key: "{model} (k={n_concepts})"
+      extra_name: "k_{n_concepts}"
+      lambda1: 0.1
+      lambda2: 0.1
+      top_k: 256
+      threshold: 0.0
+      early_stop_metric: "val_sparse_categorical_accuracy"
+      early_stop_mode: "max"
+      patience: 50
+
+    - model: 'CCD'
+      pretrain_epochs: 150
+      n_concepts: "{{n_ground_truth_concepts}}"
+      aggr_key: "{model} Large (k={n_concepts})"
+      extra_name: "large_k_{n_concepts}"
+      encoder_units: [64, 64, 64]
+      decoder_units: [64, 64]
+      latent_dims: 64
+      lambda1: 0.1
+      lambda2: 0.1
+      top_k: 256
+      threshold: 0.0
+      early_stop_metric: "val_sparse_categorical_accuracy"
+      early_stop_mode: "max"
+      patience: 50
