@@ -9,7 +9,7 @@ import concepts_xai.methods.OCACE.topicModel as CCD
 import concepts_xai.evaluation.metrics.completeness as completeness
 import os
 from pathlib import Path
-import models
+import models.models as models
 import joblib
 import random
 from prettytable import PrettyTable
@@ -1669,6 +1669,7 @@ def train_tabcbm(
         contrastive_reg_weight=experiment_config["contrastive_reg_weight"],
         feature_selection_reg_weight=experiment_config["feature_selection_reg_weight"],
         prob_diversity_reg_weight=experiment_config["prob_diversity_reg_weight"],
+        concept_prediction_weight=experiment_config.get('concept_prediction_weight', 0),
 
         seed=experiment_config.get("seed", None),
         eps=experiment_config.get("eps", 1e-5),
@@ -1706,7 +1707,35 @@ def train_tabcbm(
         optimizer_gen = lambda: tf.keras.optimizers.Adam(
             experiment_config.get("learning_rate", 1e-3),
         )
-        
+    
+    if (
+            (experiment_config.get("n_supervised_concepts", 0) != 0) and
+            (len(experiment_config.get('supervised_concept_idxs', [])) > 0)
+        ):
+            # Then we will receive partial or full concept supervision here
+            supervised_concept_idxs = experiment_config['supervised_concept_idxs']
+            if 'selected_samples' in old_results:
+                selected_samples = old_results['selected_samples']
+            else:
+                n_samples = c_train.shape[0]
+                percent = experiment_config.get(
+                    'concept_supervision_annotated_fraction',
+                    1.0,
+                )
+                selected_samples = np.random.permutation(
+                    list(range(n_samples))
+                )[:int(np.ceil(n_samples * percent))]
+                selected_samples = sorted(selected_samples)
+                
+            end_results['selected_samples'] = selected_samples
+            c_train_real = np.empty((c_train.shape[0], len(supervised_concept_idxs)))
+            c_train_real[:, :] = np.nan
+            for i, idx in enumerate(supervised_concept_idxs):
+                c_train_real[selected_samples, i] = c_train[selected_samples, idx]
+            y_train_tensors = (y_train, c_train_real)
+    else:
+        y_train_tensors = y_train
+        c_train_real = c_train
     if load_from_cache and os.path.exists(os.path.join(tabcbm_model_path, 'checkpoint')):
         logging.debug(prefix + "Found serialized TabCBM model! Unloading it right now...")
         tabcbm = TabCBM(
@@ -1715,7 +1744,11 @@ def train_tabcbm(
         )
         tabcbm.compile(optimizer=optimizer_gen())
         tabcbm._compute_self_supervised_loss(x_test[:2, :])
-        tabcbm._compute_supervised_loss(x_test[:2, :], y_test[:2])
+        tabcbm._compute_supervised_loss(
+            x_test[:2, :],
+            y_test[:2],
+            c_true=c_train_real[:2, :] if c_train_real is not None else None,
+        )
         tabcbm(x_test[:2, :])
         tabcbm.load_weights(os.path.join(tabcbm_model_path, 'checkpoint'))
     
@@ -1725,6 +1758,7 @@ def train_tabcbm(
         tabcbm_epochs_trained = old_results.get('epochs_trained')
     
     else:
+        
         # Else let's generate the model from scratch!
         ss_tabcbm = TabCBM(
             self_supervised_mode=True,
@@ -1781,7 +1815,7 @@ def train_tabcbm(
             ss_tabcbm_hist, ss_tabcbm_time_trained = timeit(
                 ss_tabcbm.fit,
                 x=x_train,
-                y=y_train,
+                y=y_train_tensors,
                 validation_split=experiment_config["holdout_fraction"],
                 epochs=experiment_config["self_supervised_train_epochs"],
                 batch_size=experiment_config["batch_size"],
@@ -1805,7 +1839,11 @@ def train_tabcbm(
                 tabcbm.compile(optimizer=optimizer_gen())
                 # Do a dummy call to initialize weights...
                 tabcbm._compute_self_supervised_loss(x_test[:2, :])
-                tabcbm._compute_supervised_loss(x_test[:2, :], y_test[:2])
+                tabcbm._compute_supervised_loss(
+                    x_test[:2, :],
+                    y_test[:2],
+                    c_true=c_train_real[:2, :] if c_train_real is not None else None,
+                )
                 tabcbm.set_weights(ss_tabcbm.get_weights())
             else:
                 # else we only need to load the relevant stuff in here
@@ -1816,7 +1854,11 @@ def train_tabcbm(
                     **tab_cbm_params,
                 )
                 tabcbm.compile(optimizer=optimizer_gen())
-                tabcbm._compute_supervised_loss(x_test[:2, :], y_test[:2])
+                tabcbm._compute_supervised_loss(
+                    x_test[:2, :],
+                    y_test[:2],
+                    c_true=c_train_real[:2, :] if c_train_real is not None else None,
+                )
         else:
             ss_tabcbm_time_trained = 0
             ss_tabcbm_epochs_trained = 0
@@ -1854,18 +1896,11 @@ def train_tabcbm(
             ]
         else:
             callbacks = [early_stopping_monitor]
-        y_train_tensors = y_train
-        if (
-            (experiment_config.get("n_supervised_concepts", 0) != 0) and
-            (len(experiment_config.get('supervised_concept_idxs', [])) > 0)
-        ):
-            # Then we will receive partial or full concept supervision here
-            supervised_concept_idxs = experiment_config['supervised_concept_idxs']
-            y_train_tensors = y_train, c_train[:, supervised_concept_idxs]
+        
         tabcbm_hist, tabcbm_time_trained = timeit(
             tabcbm.fit,
             x=x_train,
-            y=y_train,
+            y=y_train_tensors,
             validation_split=experiment_config["holdout_fraction"],
             epochs=experiment_config["max_epochs"],
             batch_size=experiment_config["batch_size"],
@@ -1882,7 +1917,7 @@ def train_tabcbm(
     ):
         end_results['ss_num_params'] = old_results['ss_num_params']
     if 'ss_num_params' in end_results:
-        logging.debug(prefix + "\tNumber of self-supervised parameters =", end_results['ss_num_params'])
+        logging.debug(prefix + f"\tNumber of self-supervised parameters = {end_results['ss_num_params']}")
     end_results['num_params'] = (
         np.sum([np.prod(p.shape) for p in tabcbm.trainable_weights])
     )
@@ -1937,9 +1972,44 @@ def train_tabcbm(
         )
     
     logging.debug(prefix + f"\t\tAccuracy is {end_results['acc']*100:.2f}%")
-    logging.debug(prefix + "\t\tPredicting CAS...")
-    if c_test is not None:
+    
+    if (
+        (experiment_config.get("n_supervised_concepts", 0) != 0) and
+        (len(experiment_config.get('supervised_concept_idxs', [])) > 0)
+    ):
+        # Then compute the mean concept predictive accuracy
+        supervised_concept_idxs = experiment_config['supervised_concept_idxs']
+        avg = 0.0
+        for learnt_concept_idx, real_concept_idx in enumerate(
+            supervised_concept_idxs
+        ):
+            # And select just the labels that are in fact being used
+            avg += sklearn.metrics.roc_auc_score(
+                c_test[:, real_concept_idx],
+                test_concept_scores[:, learnt_concept_idx],
+            )
+        end_results['avg_concept_auc'] = avg / len(supervised_concept_idxs)
+        logging.debug(
+            prefix + f"\t\tMean Concept AUC is {end_results['avg_concept_auc']*100:.2f}%"
+        )
+    
+    
+    if (c_train is not None) and (c_test is not None):
+        _, train_concept_scores = tabcbm(x_train)
+        train_concept_scores = train_concept_scores.numpy()
+        logging.debug(prefix + f"\t\tComputing best independent concept aligment...")
+        end_results['best_independent_alignment'], end_results['best_ind_alignment_auc'] = posible_load(
+            key=['best_independent_alignment', 'best_ind_alignment_auc'],
+            old_results=old_results,
+            load_from_cache=load_from_cache,
+            run_fn=lambda: metrics.find_best_independent_alignment(
+                scores=(train_concept_scores >= 0.5).astype(np.float32),
+                c_train=c_train,
+            ),
+        )
+        
         # Compute the CAS score
+        logging.debug(prefix + "\t\tPredicting CAS...")
         end_results['cas'], end_results['cas_task'], end_results['best_alignment'] = posible_load(
             key=['cas', 'cas_task', 'best_alignment'],
             old_results=old_results,
@@ -1952,7 +2022,90 @@ def train_tabcbm(
             ),
         )
         logging.debug(prefix + f"\t\t\tDone with CAS = {end_results['cas'] * 100:.2f}%")
+        
+        if experiment_config.get('perform_interventions', True):
+            # Then time to do some interventions!
+            logging.debug(prefix + f"\t\tPerforming concept interventions")
+            selected_concepts = end_results['best_ind_alignment_auc'] >= experiment_config.get(
+                'usable_concept_threshold',
+                0.85,
+            )
+            selected_concepts_idxs = np.array(list(range(experiment_config['n_concepts'])))[selected_concepts]
+            corresponding_real_concepts = np.array(end_results['best_independent_alignment'])[selected_concepts]
+            end_results['interveneable_concepts'] = posible_load(
+                key='interveneable_concepts',
+                old_results=old_results,
+                load_from_cache=load_from_cache,
+                run_fn=lambda: np.sum(selected_concepts),
+            )
+            logging.debug(
+                prefix + f"\t\t\tNumber of concepts we will intervene on " +
+                f"is {end_results['interveneable_concepts']}/{experiment_config['n_concepts']}"
+            )
+            _, test_bottleneck = tabcbm.predict_bottleneck(x_test)
+            test_bottleneck = test_bottleneck.numpy()
+            one_hot_labels = tf.keras.utils.to_categorical(y_test)
+            for num_intervened_concepts in range(1, end_results['interveneable_concepts'] + 1):
+                def _run():
+                    avg = 0.0
+                    for i in range(experiment_config.get('intervention_trials', 5)):
+                        current_sel = np.random.permutation(
+                            list(range(len(selected_concepts_idxs)))
+                        )[:num_intervened_concepts]
+                        fixed_used_concept_idxs = selected_concepts_idxs[current_sel]
+                        real_corr_concept_idx = corresponding_real_concepts[current_sel]
+                        new_test_bottleneck = test_bottleneck[:, :]
+                        # We need to figure out the "direction" of the intervention:
+                        #     There is not reason why a learnt concept aligned such that its
+                        #     corresponding ground truth concept is high when the learnt concept
+                        #     is high. Because they are binary, it could perfectly be the case
+                        #     that the alignment happend with the complement.
+                        for learnt_concept_idx, real_concept_idx in zip(
+                            fixed_used_concept_idxs,
+                            real_corr_concept_idx,
+                        ):
+                            correlation = np.corrcoef(
+                                train_concept_scores[:, learnt_concept_idx],
+                                c_train[:, real_concept_idx],
+                            )[0, 1]
+                            pos_score = np.percentile(train_concept_scores[:, learnt_concept_idx], 95)
+                            neg_score = np.percentile(train_concept_scores[:, learnt_concept_idx], 5)
+                            if correlation > 0:
+                                # Then this is a positive alignment
+                                new_test_bottleneck[:, learnt_concept_idx] = \
+                                    c_test[:, real_concept_idx] * pos_score + (
+                                        (1 - c_test[:, real_concept_idx]) * neg_score
+                                    )
+                            else:
+                                # Else we are aligned with the complement
+                                new_test_bottleneck[:, learnt_concept_idx] =  \
+                                    (1 - c_test[:, real_concept_idx]) * pos_score + (
+                                        c_test[:, real_concept_idx] * neg_score
+                                    )
+                        avg += sklearn.metrics.accuracy_score(
+                            y_test,
+                            np.argmax(
+                                scipy.special.softmax(
+                                    tabcbm.from_bottleneck(new_test_bottleneck),
+                                    axis=-1,
+                                ),
+                                axis=-1
+                            ),
+                        )
+                    return avg / experiment_config.get('intervention_trials', 5)
 
+                end_results[f'acc_intervention_{num_intervened_concepts}'] =  posible_load(
+                    key=f'acc_intervention_{num_intervened_concepts}',
+                    old_results=old_results,
+                    load_from_cache=load_from_cache,
+                    run_fn=_run,
+                )
+                logging.debug(
+                    prefix +
+                    f"\t\t\tIntervention accuracy with {num_intervened_concepts} "
+                    f"concepts: {end_results[f'acc_intervention_{num_intervened_concepts}'] * 100:.2f}%"
+                )
+        
     # Log statistics on the predicted masks
     masks = tf.sigmoid(tabcbm.feature_probabilities).numpy()
     end_results['mean_mask_prob'] = np.mean(masks)
@@ -1981,6 +2134,19 @@ def train_tabcbm(
             )['best_reduced_auc'],
         )
         logging.debug(prefix + f"\t\t\tDone: {end_results['best_concept_auc'] * 100:.2f}%")
+        logging.debug(prefix + "\t\tPredicting best independent mean concept AUCs...")
+        end_results['best_independent_concept_auc'] = posible_load(
+            key='best_independent_concept_auc',
+            old_results=old_results,
+            load_from_cache=load_from_cache,
+            run_fn=lambda: metrics.brute_force_concept_aucs(
+                concept_scores=test_concept_scores,
+                c_test=c_test,
+                reduction=np.mean,
+                alignment=end_results['best_independent_alignment'],
+            )['best_reduced_auc'],
+        )
+        logging.debug(prefix + f"\t\t\tDone: {end_results['best_independent_concept_auc'] * 100:.2f}%")
         logging.debug(prefix + "\t\tPredicting mean mask AUCs...")
         end_results['best_mean_mask_auc'] = posible_load(
             key='best_mean_mask_auc',
@@ -1998,6 +2164,20 @@ def train_tabcbm(
             )['best_reduced_auc'],
         )
         logging.debug(prefix + f"\t\t\tDone: {end_results['best_mean_mask_auc'] * 100:.2f}%")
+        logging.debug(prefix + "\t\tPredicting mean independent mask AUCs...")
+        end_results['best_independent_mean_mask_auc'] = posible_load(
+            key='best_independent_mean_mask_auc',
+            old_results=old_results,
+            load_from_cache=load_from_cache,
+            run_fn=lambda: metrics.brute_force_concept_mask_aucs(
+                concept_importance_masks=masks,
+                ground_truth_concept_masks=ground_truth_concept_masks,
+                reduction=np.mean,
+                alignment=end_results['best_independent_alignment'],
+            )['best_reduced_auc'],
+        )
+        logging.debug(prefix + f"\t\t\tDone: {end_results['best_independent_mean_mask_auc'] * 100:.2f}%")
+        
         logging.debug(prefix + "\t\tPredicting max mask AUCs...")
         end_results['best_max_mask_auc'] = posible_load(
             key='best_max_mask_auc',
@@ -2015,6 +2195,20 @@ def train_tabcbm(
             )['best_reduced_auc'],
         )
         logging.debug(prefix + f"\t\t\tDone: {end_results['best_max_mask_auc'] * 100:.2f}%")
+        logging.debug(prefix + "\t\tPredicting max independent mask AUCs...")
+        end_results['best_independent_max_mask_auc'] = posible_load(
+            key='best_independent_max_mask_auc',
+            old_results=old_results,
+            load_from_cache=load_from_cache,
+            run_fn=lambda: metrics.brute_force_concept_mask_aucs(
+                concept_importance_masks=masks,
+                ground_truth_concept_masks=ground_truth_concept_masks,
+                reduction=np.max,
+                alignment=end_results['best_independent_alignment'],
+            )['best_reduced_auc'],
+        )
+        
+        logging.debug(prefix + f"\t\t\tDone: {end_results['best_independent_max_mask_auc'] * 100:.2f}%")
         logging.debug(prefix + "\t\tPredicting feature importance matching...")
         end_results['feat_importance_diff'] = posible_load(
             key='feat_importance_diff',
@@ -2078,7 +2272,7 @@ def experiment_loop(
     ground_truth_concept_masks=None,
     restart_gpu_on_run_trial=False,
     multiprocess_inference=True,
-    print_cache_only=True,
+    print_cache_only=False,
     result_table_fields=None,
     sort_key="model",
 ):
@@ -2196,12 +2390,13 @@ def experiment_loop(
                     'n_ground_truth_concepts',
                     c_train.shape[-1],
                 )
-                logging.debug(f"\tNumber of ground truth concept is: {run_config['n_ground_truth_concepts']}")
+                logging.debug(f"\tNumber of ground truth concepts is: {run_config['n_ground_truth_concepts']}")
             run_config['num_outputs'] = run_config.get(
                 'num_outputs',
                 len(set(y_train)) if len(set(y_train)) > 2 else 1,
             )
             logging.debug(f"\tNumber of outputs is: {run_config['num_outputs']}")
+                                              
             run_config.update(current_config)
             run_config.update(extra_hypers)
             _evaluate_expressions(run_config)
@@ -2277,6 +2472,16 @@ def experiment_loop(
             if os.path.exists(local_results_path):
                 old_results = joblib.load(local_results_path)
             
+            if (run_config.get('n_supervised_concepts', 0) > 0) and (c_train is not None):
+                logging.debug(f"We will provide supervision for {run_config.get('n_supervised_concepts')} concepts")
+                if load_from_cache and ('supervised_concept_idxs' in (old_results or {})):
+                    supervised_concept_idxs = old_results['supervised_concept_idxs']
+                else:
+                    concept_idxs = np.random.permutation(list(range(run_config['n_ground_truth_concepts'])))
+                    concept_idxs = sorted(concept_idxs[:run_config['n_supervised_concepts']])
+                run_config['supervised_concept_idxs'] = concept_idxs
+                logging.debug(f"\tSupervising on concepts {concept_idxs}")
+            
             if print_cache_only and load_from_cache and (
                 old_results is not None
             ):
@@ -2348,9 +2553,11 @@ def experiment_loop(
             # And include them in our aggreation
             serialized_trial_results = {}  # Copy of trial results but it is a joblib-serializable copy
             for key, val in trial_results.items():
+                if isinstance(val, list):
+                    val = np.array(val)
                 serialized_trial_results[key] = val
                 partial_results[(aggr_key, key)].append(val)
-                if isinstance(val, (float)) and int(val) != val:
+                if isinstance(val, float) and int(val) != val:
                     # Then print it with some precision limit as well
                     # as displaying it in percent
                     logging.debug(f"\t\t{key} = {val:.4f}")
@@ -2363,16 +2570,25 @@ def experiment_loop(
     table_rows_inds = {name: i for (i, name) in enumerate(result_table_fields_keys)}
     table_rows = {}
     for (aggr_key, key), vals in partial_results.items():
-        mean, std = np.mean(vals), np.std(vals)
-        end_results[(aggr_key, key)].append((mean, std))
-        if isinstance(vals[0], (float)) and int(vals[0]) != vals[0]:
-            print(f"\t\t\t{aggr_key}__{key} = {mean:.4f} ± {std:.4f}")
-        else:
-            print(f"\t\t\t{aggr_key}__{key} = {mean} ± {std}")
-        if aggr_key not in table_rows:
-            table_rows[aggr_key] = [(None, None) for _ in result_table_fields_keys]
-        if key in table_rows_inds:
-            table_rows[aggr_key][table_rows_inds[key]] = (mean, std) #f'{mean:.4f} ± {std:.4f}'
+        vals = np.array(vals)
+        try:
+            mean, std = np.mean(vals), np.std(vals)
+            end_results[(aggr_key, key)].append((mean, std))
+            if isinstance(vals[0], (float)) and int(vals[0]) != vals[0]:
+                print(f"\t\t\t{aggr_key}__{key} = {mean:.4f} ± {std:.4f}")
+            else:
+                print(f"\t\t\t{aggr_key}__{key} = {mean} ± {std}")
+            if aggr_key not in table_rows:
+                table_rows[aggr_key] = [(None, None) for _ in result_table_fields_keys]
+            if key in table_rows_inds:
+                table_rows[aggr_key][table_rows_inds[key]] = (mean, std)
+        except:
+            # Else we could not average/reduce these results so we will save them as
+            # they are.
+            logging.warning(
+                f"\tWe could not average results for {key} in model {aggr_key}"
+            )
+            end_results[(aggr_key, key)].append(vals)
     table_rows = list(table_rows.items())
     if sort_key == "model":
         # Then sort based on method name

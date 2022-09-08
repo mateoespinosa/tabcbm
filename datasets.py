@@ -203,7 +203,7 @@ def generate_synthetic_sc_dataset(
     # Make combination labels
     used_combos = set()
     for i in range(adata.shape[0]):
-        used_combos.add((adata.obs.cell_type[i], tuple(adata.obs.has_act_program[i].to_numpy())))
+        used_combos.add((adata.obs.cell_type[i], tuple(adata.obs.has_act_program[i])))
     combination_label_map = {}
     inv_combination_label_map = {}
     for cell_type in range(1, simulator.n_cell_types + 1):
@@ -212,9 +212,8 @@ def generate_synthetic_sc_dataset(
             if key in used_combos:
                 combination_label_map[key] = len(combination_label_map)
                 inv_combination_label_map[combination_label_map[key]] = key
-    print("combination_label_map =", combination_label_map)
     adata.obs['combination_label'] = [
-        combination_label_map[(adata.obs.cell_type[i], tuple(adata.obs.has_act_program[i].to_numpy()))]
+        combination_label_map[(adata.obs.cell_type[i], tuple(adata.obs.has_act_program[i]))]
         for i in range(adata.shape[0])
     ]
     adata.obs['combination_label_str'] = [f'comb_label_{x}' for x in adata.obs['combination_label']]

@@ -145,7 +145,9 @@ class TabCBM(tf.keras.Model):
             "mean_probability",
         ]
         if self.n_supervised_concepts != 0:
-            self.metric_name.append("avg_concept_prediction")
+            self.metric_names.append("avg_concept_prediction")
+            self.metric_names.append("concept_pred_loss")
+            self.metric_names.append("avg_concept_accuracy")
         self.metrics_dict = {
             name: tf.keras.metrics.Mean(name=name)
             for name in self.metric_names
@@ -674,21 +676,17 @@ class TabCBM(tf.keras.Model):
             )
             concept_pred_loss = 0
             seen_concepts = 0
-            aligned_idx = 0
-            for concept_idx in range(c_true.shape[-1]):
-                if tf.math.reduce_any(tf.math.is_nan(c_true[:, concept_idx])):
-                    # Then this a concept that has not been provided so we will
-                    # ignore it
-                    continue
-                # Else this concept has been provided so it is time to check its value with its assigned
-                # dimension
+            for aligned_idx, concept_idx in enumerate(range(c_true.shape[-1])):
+                selected_samples = tf.math.logical_not(tf.math.is_nan(c_true[:, concept_idx]))
                 seen_concepts += 1
-                avg_concept_acc += tf.keras.metrics.binary_crossentropy(
-                    tf.cast(c_true[:, concept_idx], tf.float32),
-                    tf.cast(scores[:, aligned_idx], tf.float32),
+                concept_pred_loss += tf.cond(
+                    tf.math.reduce_any(selected_samples),
+                    lambda: tf.keras.metrics.binary_crossentropy(
+                        tf.cast(tf.boolean_mask(c_true[:, concept_idx], selected_samples, axis=0), tf.float32),
+                        tf.cast(tf.boolean_mask(scores[:, aligned_idx], selected_samples, axis=0), tf.float32),
+                    ),
+                    lambda: 0.0,
                 )
-                # And increase the index of aligned dimensions
-                aligned_idx += 1
             concept_pred_loss = concept_pred_loss / (seen_concepts + 1e-15)
         else:
             concept_pred_loss = 0
@@ -713,21 +711,17 @@ class TabCBM(tf.keras.Model):
         if self.n_supervised_concepts != 0:
             avg_concept_acc = 0
             seen_concepts = 0
-            aligned_idx = 0
-            for concept_idx in range(c_true.shape[-1]):
-                if tf.math.reduce_any(tf.math.is_nan(c_true[:, concept_idx])):
-                    # Then this a concept that has not been provided so we will
-                    # ignore it
-                    continue
-                # Else this concept has been provided so it is time to check its value with its assigned
-                # dimension
+            for aligned_idx, concept_idx in enumerate(range(c_true.shape[-1])):
+                selected_samples = tf.math.logical_not(tf.math.is_nan(c_true[:, concept_idx]))
                 seen_concepts += 1
-                avg_concept_acc += tf.keras.metrics.binary_accuracy(
-                    tf.cast(c_true[:, concept_idx], tf.float32),
-                    tf.cast(scores[:, aligned_idx], tf.float32),
+                avg_concept_acc += tf.cond(
+                    tf.math.reduce_any(selected_samples),
+                    lambda: tf.keras.metrics.binary_accuracy(
+                        tf.cast(tf.boolean_mask(c_true[:, concept_idx], selected_samples, axis=0), tf.float32),
+                        tf.cast(tf.boolean_mask(scores[:, aligned_idx], selected_samples, axis=0), tf.float32),
+                    ),
+                    lambda: 0.0,
                 )
-                # And increase the index of aligned dimensions
-                aligned_idx += 1
             
             total_metrics += [
                 ("concept_pred_loss", concept_pred_loss),
@@ -840,6 +834,16 @@ class TabCBM(tf.keras.Model):
             training=False,
         )
         return predicted_labels, concept_scores
+
+    def predict_bottleneck(self, x, **kwargs):
+        concept_scores, bottleneck = self.concept_scores(x)
+        return concept_scores, bottleneck
+    
+    def from_bottleneck(self, bottleneck):
+        return self.concepts_to_labels_model(
+            self.g_model(bottleneck),
+            training=False,
+        )
     
     def intervene(self, x, concepts_intervened, concept_values, **kwargs):
         concept_scores, bottleneck = self.concept_scores(x)

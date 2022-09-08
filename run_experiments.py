@@ -103,6 +103,15 @@ def build_parser():
         ),
     )
     parser.add_argument(
+        '--print_cache_only',
+        action='store_true',
+        default=False,
+        help=(
+            "If true then we will simply load and print results from cache without loading a model "
+            "recomputing statistics."
+        ),
+    )
+    parser.add_argument(
         '--output_dir',
         '-o',
         default=None,
@@ -163,6 +172,7 @@ def main(
     debug=True,
     result_table_fields=None,
     sort_key="model",
+    print_cache_only=False,
     **kwargs,
 ):
     
@@ -288,6 +298,7 @@ def main(
         data_generator=data_generator,
         result_table_fields=result_table_fields,
         sort_key=sort_key,
+        print_cache_only=print_cache_only,
     )
     return 0
 
@@ -309,4 +320,5 @@ if __name__ == '__main__':
         debug=args.debug,
         result_table_fields=args.field_name,
         sort_key=args.sort_key,
+        print_cache_only=args.print_cache_only,
     ))

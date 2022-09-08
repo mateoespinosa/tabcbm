@@ -55,7 +55,7 @@ shared_params:
 
     # Misc Hyperparameters
     seed: 42
-    eps: 1e-5
+    eps: 1.0E-5
 
     # Training variables
     batch_size: 1024
@@ -69,6 +69,7 @@ shared_params:
 
     # Metrics variables
     cas_step: 10
+    usable_concept_threshold: 0.85
 
 runs:
     - model: 'TabCBM'
