@@ -301,11 +301,8 @@ class TabCBM(tf.keras.Model):
     def _relaxed_multi_bernoulli_sample(self, pi, shape):
         # Sample from a standard Gaussian first to perform the reparameterization trick
         epsilon = tf.random.normal(shape, 0, 1)
-        epsilon = tf.debugging.check_numerics(epsilon, "y_pred has nan!")
         v = tf.transpose(tf.linalg.matmul(self.L, epsilon))
-        v = tf.debugging.check_numerics(v, "v has nan!")
         u = Gaussian_CDF(v)    
-        u = tf.debugging.check_numerics(u, "u has nan!")
         return tf.nn.sigmoid(
             1.0/self.temperature * (log(pi) - log(1. - pi) + log(u) - log(1. - u))
         )

@@ -31,6 +31,24 @@ shared_params:
     usable_concept_threshold: 0.85
 
 runs:
+    - model: 'CBM'
+      pretrain_epochs: 100
+      include_bn: True
+      pass_concept_logits: False
+      concept_loss_weight: [0.1, 5]
+      n_supervised_concepts: [1, 2]
+      concept_supervision_annotated_fraction: [0.25, 1]
+      n_concepts: "{{n_ground_truth_concepts}}"
+      aggr_key: "{model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction}, c_weight={concept_loss_weight})"
+      extra_name: "k_{n_concepts}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}_c_weight_{concept_loss_weight}"
+      patience: 250
+      grid_variables:
+          - n_supervised_concepts
+          - concept_supervision_annotated_fraction
+          - concept_loss_weight
+      grid_search_mode: exhaustive
+   
+
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
@@ -55,7 +73,9 @@ runs:
       early_stop_metric_pretrain: "val_loss"
       early_stop_mode_pretrain: "min"
       patience: .inf
-    
+     
+     
+     
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
@@ -80,9 +100,13 @@ runs:
       early_stop_metric_pretrain: "val_loss"
       early_stop_mode_pretrain: "min"
       patience: .inf
-      n_supervised_concepts: 1
-      concept_supervision_annotated_fraction: 0.25
-      concept_prediction_weight: 1
+      n_supervised_concepts: [1, 2]
+      concept_supervision_annotated_fraction: [0.25, 1]
+      concept_prediction_weight: 0.1
+      grid_variables:
+          - n_supervised_concepts
+          - concept_supervision_annotated_fraction
+      grid_search_mode: exhaustive
 
     - model: 'TabCBM'
       pretrain_epochs: 50
@@ -101,16 +125,21 @@ runs:
       temperature: 1
       top_k: 256
       n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction})"
-      extra_name: "k_{n_concepts}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}"
+      aggr_key: "{model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction}, concept_weight={concept_prediction_weight})"
+      extra_name: "k_{n_concepts}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}_concept_prediction_weight_{concept_prediction_weight}"
       early_stop_metric: "val_accuracy"
       early_stop_mode: "max"
       early_stop_metric_pretrain: "val_loss"
       early_stop_mode_pretrain: "min"
       patience: .inf
-      n_supervised_concepts: 2
-      concept_supervision_annotated_fraction: 0.25
+      n_supervised_concepts: [1, 2]
+      concept_supervision_annotated_fraction: [0.25, 1]
       concept_prediction_weight: 1
+      grid_variables:
+          - n_supervised_concepts
+          - concept_supervision_annotated_fraction
+      grid_search_mode: exhaustive
+
 
     - model: 'TabNet'
       pretrain_epochs: 100
@@ -155,38 +184,28 @@ runs:
       extra_name: "large"
       mlp_extra_units: [16]
 
-
     - model: 'XGBoost'
       extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
       aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
       nthread: 6
       learning_rate: 1.0E-2
-      max_depth: 5
-
-    - model: 'XGBoost'
-      extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
-      aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
-      nthread: 6
-      learning_rate: 1.0E-2
-      max_depth: 10
-
+      max_depth: [5, 10]
+      grid_variables:
+          - max_depth
+      grid_search_mode: exhaustive
+  
     - model: 'LightGBM'
       extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
       aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
       nthread: 6
       learning_rate: 1.0E-2
-      max_depth: 5
-      num_leaves: 32
+      max_depth: [5, 10]
+      num_leaves: [32, 1024]
       verbosity: -1
-
-    - model: 'LightGBM'
-      extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
-      aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
-      nthread: 6
-      learning_rate: 1.0E-2
-      max_depth: 10
-      num_leaves: 1024
-      verbosity: -1
+      grid_variables:
+          - max_depth
+          - num_leaves
+      grid_search_mode: paired
 
     - model: 'SENN'
       pretrain_autoencoder_epochs: 100
