@@ -44,6 +44,7 @@ class TabCBM(tf.keras.Model):
         self_supervised_selection_prob=None,
         gate_estimator_weight=1,
         include_bn=False,
+        feature_budget=None,
         
         threshold=0.5,
         loss_fn=tf.keras.losses.sparse_categorical_crossentropy,
@@ -56,6 +57,7 @@ class TabCBM(tf.keras.Model):
         contrastive_reg_weight=0.1,
         feature_selection_reg_weight=1,
         concept_prediction_weight=0,
+        feature_budget_weight=0,
 
         seed=None,
         eps=1e-5,
@@ -80,6 +82,7 @@ class TabCBM(tf.keras.Model):
         self.threshold = threshold
         self.n_concepts = n_concepts
         self.n_supervised_concepts = n_supervised_concepts
+        self.feature_budget = feature_budget
         assert self.n_supervised_concepts <= self.n_concepts, (
             f"We were indicated that {self.n_supervised_concepts} concepts "
             f"will be given for supervision yet we only are learning a total "
@@ -97,6 +100,7 @@ class TabCBM(tf.keras.Model):
         self.contrastive_reg_weight = contrastive_reg_weight
         self.feature_selection_reg_weight = feature_selection_reg_weight
         self.concept_prediction_weight = concept_prediction_weight
+        self.feature_budget_weight = feature_budget_weight
         
         self.latent_dims = latent_dims
         self.end_to_end_training = end_to_end_training
@@ -182,6 +186,25 @@ class TabCBM(tf.keras.Model):
         self.concept_generators = concept_generators or []
         self.rec_values_models = []
         self.rec_mask_models = []
+        
+        if prior_masks is None:
+            # Then we randomly initialize the logits
+            initial_mask = tf.keras.initializers.RandomUniform(
+                minval=-1,
+                maxval=1,
+            )
+        else:
+            # otherwise a prior has been imposed so let's take advantage
+            # of it!
+            initial_mask = lambda *args, **kwargs: prior_masks
+        self.feature_probabilities = self.add_weight(
+            name=f"probability_vector_logits",
+            shape=(self.n_concepts, input_shape[-1],),
+            dtype=tf.float32,
+            initializer=initial_mask,
+            trainable=True,
+        )
+
         for i in range(self.n_concepts):
             # For each concept we will have a simple MLP that maps
             # the masked input to the concept's input latent space. This will
@@ -219,23 +242,6 @@ class TabCBM(tf.keras.Model):
                 )
                 self.concept_generators[-1].compile()
             
-            if (prior_masks is None) or (prior_masks[i] is None):
-                # Then we randomly initialize the logits
-                initial_mask = tf.keras.initializers.RandomUniform(
-                    minval=-1,
-                    maxval=1,
-                )
-            else:
-                # otherwise a prior has been imposed so let's take advantage
-                # of it!
-                initial_mask = prior_masks[i]
-            self.feature_probabilities = self.add_weight(
-                name=f"probability_vector_logits",
-                shape=(self.n_concepts, input_shape[-1],),
-                dtype=tf.float32,
-                initializer=initial_mask,
-                trainable=True,
-            )
             
             # TODO: Make this conditional on self_supervised mode to avoid loading the
             #       entire model if we are not using these mask generators
@@ -688,6 +694,23 @@ class TabCBM(tf.keras.Model):
         else:
             concept_pred_loss = 0
         
+        # And if we were given a budget for our features, let's take that
+        # into account for our loss function
+        feature_budget_loss = 0.0
+        if self.feature_budget:
+            probs = tf.nn.sigmoid(self.feature_probabilities)
+            for i in range(self.n_concepts):
+#                 feature_budget_loss += tf.math.log(
+#                     tf.math.maximum(
+#                         self.feature_budget - tf.math.reduce_sum(probs[i, :]),
+#                         1e-5
+#                     )
+#                 )
+                feature_budget_loss += (self.feature_budget - tf.math.reduce_sum(probs[i, :]))**2
+#             feature_budget_loss = -feature_budget_loss/self.n_concepts
+            feature_budget_loss = feature_budget_loss/self.n_concepts
+                    
+        
         # And include them into the total loss
         total_loss = (
             log_prob_loss -
@@ -696,7 +719,8 @@ class TabCBM(tf.keras.Model):
             self.diversity_reg_weight * reg_loss_similarity + 
             self.feature_selection_reg_weight * prob_sparsity_loss +
             self.prob_diversity_reg_weight * prob_diversity_loss + 
-            self.concept_prediction_weight * concept_pred_loss
+            self.concept_prediction_weight * concept_pred_loss +
+            self.feature_budget_weight * feature_budget_loss
         )
         
         # And report all metrics together with the main loss
