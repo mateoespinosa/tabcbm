@@ -113,9 +113,13 @@ def train_mlp(
         np.sum([np.prod(p.shape) for p in end_to_end_model.trainable_weights])
     )
     logging.info(prefix + "\tEvaluating MLP model")
+    preds = end_to_end_model.predict(
+        x_test,
+        batch_size=experiment_config["batch_size"],
+    )
     if experiment_config["num_outputs"] > 1:
         preds = scipy.special.softmax(
-            end_to_end_model.predict(x_test),
+            preds,
             axis=-1,
         )
 
@@ -132,13 +136,16 @@ def train_mlp(
             multi_class='ovo',
         )
     else:
+        if np.min(preds) < 0.0 or np.max(preds) > 1:
+            # Then we assume that we have outputed logits
+            preds = tf.math.sigmoid(preds).numpy()
         end_results['acc'] = sklearn.metrics.accuracy_score(
             y_test,
-            end_to_end_model.predict(x_test),
+            (preds >= 0.5).astype(np.int32),
         )
         end_results['auc'] = sklearn.metrics.roc_auc_score(
             y_test,
-            end_to_end_model.predict(x_test),
+            (preds >= 0.5).astype(np.int32),
         )
     
     # Log training times and whatnot

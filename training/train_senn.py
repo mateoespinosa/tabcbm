@@ -67,7 +67,7 @@ def train_senn(
     coefficient_model = models.construct_senn_coefficient_model(
         units=experiment_config["coefficient_model_units"],
         num_concepts=experiment_config['n_concepts'],
-        num_outputs=experiment_config["num_outputs"],
+        num_outputs=max(experiment_config["num_outputs"], 2),
     )
     encoder_path = os.path.join(
         experiment_config["results_dir"],
@@ -86,7 +86,7 @@ def train_senn(
             concept_encoder=concept_encoder,
             concept_decoder=concept_decoder,
             coefficient_model=coefficient_model,
-            num_outputs=experiment_config["num_outputs"],
+            num_outputs=max(experiment_config["num_outputs"], 2),
             regularization_strength=experiment_config.get(
                 "regularization_strength",
                 0.1,
@@ -102,8 +102,8 @@ def train_senn(
         autoencoder_epochs_trained = old_results.get('autoencoder_epochs_trained')
         autoencoder_time_trained = old_results.get('autoencoder_time_trained')
     else:
-        logging.info(prefix + "SENN Autoencoder model pre-training...")
         if experiment_config.get("pretrain_autoencoder_epochs"):
+            logging.info(prefix + "SENN Autoencoder model pre-training...")
             def rec_loss_fn(y_true, y_pred):
                 return tf.reduce_sum(
                     tf.square(y_true - y_pred),
@@ -153,7 +153,7 @@ def train_senn(
             concept_encoder=concept_encoder,
             concept_decoder=concept_decoder,
             coefficient_model=coefficient_model,
-            num_outputs=experiment_config["num_outputs"],
+            num_outputs=max(experiment_config["num_outputs"], 2),
             regularization_strength=experiment_config.get(
                 "senn_regularization_strength",
                 0.1,
@@ -220,16 +220,18 @@ def train_senn(
     )
     logging.debug(prefix + f"\tNumber of SENN trainable parameters = {end_results['num_params']}")
     logging.info(prefix + "\tEvaluating SENN...")
-    test_output, (_, x_test_theta_class_scores) = senn_model(x_test)
-    test_output = test_output.numpy()
+    test_output, (_, x_test_theta_class_scores) = senn_model.predict(
+        x_test,
+        batch_size=experiment_config["batch_size"],
+    )
     test_concept_scores = get_argmax_concept_explanations(
         test_output,
-        x_test_theta_class_scores.numpy(),
+        x_test_theta_class_scores,
     )
     
     # Compute the model's accuracies
     logging.debug(prefix + "\t\tComputing accuracies...")
-    if experiment_config["num_outputs"] > 1:
+    if max(experiment_config["num_outputs"], 2) > 1:
         # Then lets apply a softmax activation over all the probability
         # classes
         preds = scipy.special.softmax(
@@ -259,7 +261,9 @@ def train_senn(
             test_output,
         )
     
-    if c_test is not None:
+    if (not experiment_config.get('continuous_concepts', False)) and (
+        c_test is not None
+    ):
         # Compute the CAS score
         logging.debug(prefix + "\t\tComputing CAS...")
         end_results['cas'], end_results['cas_task'], end_results['best_alignment'] = utils.posible_load(
@@ -273,6 +277,20 @@ def train_senn(
                 step=experiment_config.get('cas_step', 2),
             )
         )
+        
+        # Compute correlation between bottleneck entries and ground truch concepts
+        logging.debug(prefix + "\t\tConcept correlation matrix...")
+        end_results['concept_corr_mat'] = utils.posible_load(
+            key='concept_corr_mat',
+            old_results=old_results,
+            load_from_cache=load_from_cache,
+            run_fn=lambda: metrics.correlation_alignment(
+                scores=test_concept_scores,
+                c_test=c_test,
+            ),
+        )
+        logging.debug(prefix + f"\t\t\tDone")
+        
     logging.debug(prefix + "\t\tDone with evaluation...")
     if return_model:
         return end_results, senn_model

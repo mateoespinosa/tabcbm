@@ -429,6 +429,19 @@ def train_cbm(
         )
         logging.debug(prefix + f"\t\t\tDone with CAS = {end_results['cas'] * 100:.2f}%")
         
+        # Compute correlation between bottleneck entries and ground truch concepts
+        logging.debug(prefix + "\t\tConcept correlation matrix...")
+        end_results['concept_corr_mat'] = utils.posible_load(
+            key='concept_corr_mat',
+            old_results=old_results,
+            load_from_cache=load_from_cache,
+            run_fn=lambda: metrics.correlation_alignment(
+                scores=test_concept_scores,
+                c_test=c_test,
+            ),
+        )
+        logging.debug(prefix + f"\t\t\tDone")
+        
         if experiment_config.get('perform_interventions', True):
             # Then time to do some interventions!
             logging.debug(prefix + f"\t\tPerforming concept interventions")

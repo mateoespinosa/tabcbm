@@ -46,14 +46,13 @@ def train_xgboost(
         f"models/weights{extra_name}.model"
     )
     
-    
     params = dict(
         max_depth=experiment_config.get('max_depth', 6),
         eta=experiment_config.get('learning_rate', 0.3),
         objective=(
             'multi:softprob'
-            if experiment_config["num_outputs"] > 1 else
-            'binary:logistic'
+#             if experiment_config["num_outputs"] > 1 else
+#             'binary:logistic'
         ),
         num_class=len(np.unique(y_train)),
         nthread=experiment_config.get('nthread', 4),
@@ -209,22 +208,24 @@ def train_lightgbm(
         f"models/weights{extra_name}.model"
     )
     
-    
+    num_class = len(np.unique(y_train))
+    if num_class <= 2:
+        num_class = 2
     params = dict(
         max_depth=experiment_config.get('max_depth', 6),
         num_leaves=experiment_config.get('num_leaves', 31),
         learning_rate=experiment_config.get('learning_rate', 0.1),
         objective=(
             'multiclass'
-            if experiment_config["num_outputs"] > 1 else
-            'binary'
+#             if experiment_config["num_outputs"] > 1 else
+#             'binary'
         ),
-        num_class=len(np.unique(y_train)),
+        num_class=num_class,
         nthread=experiment_config.get('nthread', 4),
         metric=(
             'multiclass'
-            if experiment_config["num_outputs"] > 1 else
-            'auc_mu'
+#             if experiment_config["num_outputs"] > 1 else
+#             'auc_mu'
         ),
             
         seed=seed,

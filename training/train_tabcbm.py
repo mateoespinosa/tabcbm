@@ -130,9 +130,13 @@ def train_tabcbm(
         pretrain_time_trained = old_results.get('pretrained_time_trained')
         
     logging.info(prefix + "\tEvaluating end-to-end pretrained model")
-    if experiment_config["num_outputs"] > 1:
+    end_to_end_preds = end_to_end_model.predict(
+        x_test,
+        batch_size=experiment_config["batch_size"],
+    )
+    if ((len(end_to_end_preds.shape) == 2)) and (end_to_end_preds.shape[-1] >= 2):
         preds = scipy.special.softmax(
-            end_to_end_model.predict(x_test),
+            end_to_end_preds,
             axis=-1,
         )
 
@@ -149,13 +153,17 @@ def train_tabcbm(
             multi_class='ovo',
         )
     else:
+        if np.min(end_to_end_preds) < 0.0 or np.max(end_to_end_pred) > 1:
+            # Then we assume that we have outputed logits
+            end_to_end_preds = tf.math.sigmoid(end_to_end_preds).numpy()
+        end_to_end_preds = (end_to_end_preds >= 0.5).astype(np.int32)
         end_results['pre_train_acc'] = sklearn.metrics.accuracy_score(
             y_test,
-            end_to_end_model.predict(x_test),
+            end_to_end_preds,
         )
         end_results['pre_train_auc'] = sklearn.metrics.roc_auc_score(
             y_test,
-            end_to_end_model.predict(x_test),
+            end_to_end_preds,
         )
     logging.debug(prefix + f"\t\tPretrained model task accuracy: {end_results['pre_train_acc']*100:.2f}%")
     logging.debug(
@@ -191,7 +199,8 @@ def train_tabcbm(
         feature_selection_reg_weight=experiment_config["feature_selection_reg_weight"],
         prob_diversity_reg_weight=experiment_config["prob_diversity_reg_weight"],
         concept_prediction_weight=experiment_config.get('concept_prediction_weight', 0),
-
+        feature_budget=experiment_config.get('feature_budget'),
+        feature_budget_weight=experiment_config.get('feature_budget_weight', 0),
         seed=experiment_config.get("seed", None),
         eps=experiment_config.get("eps", 1e-5),
         end_to_end_training=experiment_config.get('end_to_end_training', False),
@@ -267,7 +276,8 @@ def train_tabcbm(
             **tab_cbm_params,
         )
         tabcbm.compile(optimizer=optimizer_gen())
-        tabcbm._compute_self_supervised_loss(x_test[:2, :])
+        if experiment_config.get('force_generator_inclusion', True):
+            tabcbm._compute_self_supervised_loss(x_test[:2, :])
         tabcbm._compute_supervised_loss(
             x_test[:2, :],
             y_test[:2],
@@ -426,6 +436,11 @@ def train_tabcbm(
             ]
         else:
             callbacks = [early_stopping_monitor]
+        logging.debug(
+            prefix +
+            f"\tTabCBM trainable parameters = " + 
+            f"{np.sum([np.prod(p.shape) for p in tabcbm.trainable_weights])}"
+        )
         
         tabcbm_hist, tabcbm_time_trained = utils.timeit(
             tabcbm.fit,
@@ -476,10 +491,11 @@ def train_tabcbm(
         end_results['ss_time_trained'] = ss_tabcbm_time_trained
     # Evaluate our model
     logging.info(prefix + "\tEvaluating TabCBM")
-    test_output, test_concept_scores = tabcbm(x_test)
-    test_concept_scores = test_concept_scores.numpy()
-    test_output = test_output.numpy()
-    if experiment_config["num_outputs"] > 1:
+    test_output, test_concept_scores = tabcbm.predict(
+        x_test,
+        batch_size=experiment_config["batch_size"],
+    )
+    if ((len(test_output.shape) == 2)) and (test_output.shape[-1] >= 2):
         # Then lets apply a softmax activation over all the probability
         # classes
         preds = scipy.special.softmax(
@@ -500,13 +516,18 @@ def train_tabcbm(
             multi_class='ovo',
         )
     else:
+        test_preds = test_output
+        if np.min(test_preds) < 0.0 or np.max(test_preds) > 1:
+            # Then we assume that we have outputed logits
+            test_preds = tf.math.sigmoid(test_preds).numpy()
+        test_preds = (test_preds >= 0.5).astype(np.int32)
         end_results['acc'] = sklearn.metrics.accuracy_score(
             y_test,
-            test_output,
+            test_preds,
         )
         end_results['auc'] = sklearn.metrics.roc_auc_score(
             y_test,
-            test_output,
+            test_preds,
         )
     
     logging.debug(
@@ -536,8 +557,10 @@ def train_tabcbm(
     
     
     if (c_train is not None) and (c_test is not None):
-        _, train_concept_scores = tabcbm(x_train)
-        train_concept_scores = train_concept_scores.numpy()
+        _, train_concept_scores = tabcbm.predict(
+            x_train,
+            batch_size=experiment_config["batch_size"],
+        )
         logging.debug(prefix + f"\t\tComputing best independent concept aligment...")
         end_results['best_independent_alignment'], end_results['best_ind_alignment_auc'] = utils.posible_load(
             key=['best_independent_alignment', 'best_ind_alignment_auc'],
@@ -549,22 +572,43 @@ def train_tabcbm(
             ),
         )
         
-        # Compute the CAS score
-        logging.debug(prefix + "\t\tPredicting CAS...")
-        end_results['cas'], end_results['cas_task'], end_results['best_alignment'] = utils.posible_load(
-            key=['cas', 'cas_task', 'best_alignment'],
+        if not experiment_config.get('continuous_concepts', False):
+            # Compute the CAS score
+            logging.debug(prefix + "\t\tPredicting CAS...")
+            end_results['cas'], end_results['cas_task'], end_results['best_alignment'] = utils.posible_load(
+                key=['cas', 'cas_task', 'best_alignment'],
+                old_results=old_results,
+                load_from_cache=load_from_cache,
+                run_fn=lambda: metrics.embedding_homogeneity(
+                    c_vec=test_concept_scores,
+                    c_test=c_test,
+                    y_test=y_test,
+                    step=experiment_config.get('cas_step', 2),
+                ),
+            )
+            logging.debug(prefix + f"\t\t\tDone with CAS = {end_results['cas'] * 100:.2f}%")
+        
+        # Compute correlation between bottleneck entries and ground truch concepts
+        logging.debug(prefix + "\t\tConcept correlation matrix...")
+        end_results['concept_corr_mat'] = utils.posible_load(
+            key='concept_corr_mat',
             old_results=old_results,
             load_from_cache=load_from_cache,
-            run_fn=lambda: metrics.embedding_homogeneity(
-                c_vec=test_concept_scores,
+            run_fn=lambda: metrics.correlation_alignment(
+                scores=test_concept_scores,
                 c_test=c_test,
-                y_test=y_test,
-                step=experiment_config.get('cas_step', 2),
             ),
         )
-        logging.debug(prefix + f"\t\t\tDone with CAS = {end_results['cas'] * 100:.2f}%")
+        if experiment_config.get('continuous_concepts', False):
+            print("Masks:")
+            print(tf.sigmoid(tabcbm.feature_probabilities).numpy())
+            print("Concept correlation matrix:")
+            print(end_results['concept_corr_mat'])
+        logging.debug(prefix + f"\t\t\tDone")
         
-        if experiment_config.get('perform_interventions', True):
+        if experiment_config.get('perform_interventions', True) and (
+            not experiment_config.get('continuous_concepts', False)
+        ):
             # Then time to do some interventions!
             logging.debug(prefix + f"\t\tPerforming concept interventions")
             selected_concepts = end_results['best_ind_alignment_auc'] >= experiment_config.get(
@@ -670,45 +714,46 @@ def train_tabcbm(
         c_test is not None
     ):
         # Then time to compute the best mask scores we can
-        logging.debug(prefix + "\t\tPredicting best mean concept AUCs...")
-        end_results['best_concept_auc'] = utils.posible_load(
-            key='best_concept_auc',
-            old_results=old_results,
-            load_from_cache=load_from_cache,
-            run_fn=lambda: metrics.brute_force_concept_aucs(
-                concept_scores=test_concept_scores,
-                c_test=c_test,
-                reduction=np.mean,
-                alignment=(
-                    end_results['best_alignment']
-                    if max(experiment_config['n_concepts'], c_test.shape[-1]) > 6
-                    else None
-                ),
-            )['best_reduced_auc'],
-        )
-        logging.debug(
-            prefix +
-            f"\t\t\tDone: {end_results['best_concept_auc'] * 100:.2f}%"
-        )
-        logging.debug(
-            prefix +
-            "\t\tPredicting best independent mean concept AUCs..."
-        )
-        end_results['best_independent_concept_auc'] = utils.posible_load(
-            key='best_independent_concept_auc',
-            old_results=old_results,
-            load_from_cache=load_from_cache,
-            run_fn=lambda: metrics.brute_force_concept_aucs(
-                concept_scores=test_concept_scores,
-                c_test=c_test,
-                reduction=np.mean,
-                alignment=end_results['best_independent_alignment'],
-            )['best_reduced_auc'],
-        )
-        logging.debug(
-            prefix +
-            f"\t\t\tDone: {end_results['best_independent_concept_auc'] * 100:.2f}%"
-        )
+        if not experiment_config.get('continuous_concepts', False):
+            logging.debug(prefix + "\t\tPredicting best mean concept AUCs...")
+            end_results['best_concept_auc'] = utils.posible_load(
+                key='best_concept_auc',
+                old_results=old_results,
+                load_from_cache=load_from_cache,
+                run_fn=lambda: metrics.brute_force_concept_aucs(
+                    concept_scores=test_concept_scores,
+                    c_test=c_test,
+                    reduction=np.mean,
+                    alignment=(
+                        end_results['best_alignment']
+                        if max(experiment_config['n_concepts'], c_test.shape[-1]) > 6
+                        else None
+                    ),
+                )['best_reduced_auc'],
+            )
+            logging.debug(
+                prefix +
+                f"\t\t\tDone: {end_results['best_concept_auc'] * 100:.2f}%"
+            )
+            logging.debug(
+                prefix +
+                "\t\tPredicting best independent mean concept AUCs..."
+            )
+            end_results['best_independent_concept_auc'] = utils.posible_load(
+                key='best_independent_concept_auc',
+                old_results=old_results,
+                load_from_cache=load_from_cache,
+                run_fn=lambda: metrics.brute_force_concept_aucs(
+                    concept_scores=test_concept_scores,
+                    c_test=c_test,
+                    reduction=np.mean,
+                    alignment=end_results['best_independent_alignment'],
+                )['best_reduced_auc'],
+            )
+            logging.debug(
+                prefix +
+                f"\t\t\tDone: {end_results['best_independent_concept_auc'] * 100:.2f}%"
+            )
         logging.debug(prefix + "\t\tPredicting mean mask AUCs...")
         end_results['best_mean_mask_auc'] = utils.posible_load(
             key='best_mean_mask_auc',

@@ -12,6 +12,7 @@ import argparse
 import sys
 import warnings
 import datasets as data
+import random
 from pathlib import Path
 
 ################################################################################
@@ -181,6 +182,11 @@ def main(
     ############################################################################
 
     seed_everything(42)
+    os.environ['PYTHONHASHSEED'] = str(42)
+    tf.random.set_seed(42)
+    np.random.seed(42)
+    random.seed(42)
+    
     if suppress_warnings:
         tf.data.experimental.enable_debug_mode()
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -280,6 +286,8 @@ def main(
         data_generator = data.generate_synth_sc_data
     elif  ds_name == "forest_cover":
         data_generator = data.generate_forest_cover_data
+    elif ds_name == "higgs":
+        data_generator = data.generate_higgs_data
     else:
         used = experiment_config['dataset']
         raise ValueError(f'Unrecognized dataset name "{used}"')

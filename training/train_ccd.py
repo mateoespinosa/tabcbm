@@ -43,16 +43,15 @@ def train_ccd(
     old_results = (old_results or {}) if load_from_cache else {}
     verbosity = experiment_config.get("verbosity", 0)
     
-    if experiment_config["num_outputs"] <= 2:
+    if experiment_config["num_outputs"] < 2:
         acc_fn = lambda y_true, y_pred: sklearn.metrics.roc_auc_score(
             y_true,
             y_pred
         )
     else:
-        acc_fn = lambda y_true, y_pred: sklearn.metrics.roc_auc_score(
-            tf.keras.utils.to_categorical(y_true),
-            scipy.special.softmax(y_pred, axis=-1),
-            multi_class='ovo',
+        acc_fn = lambda y_true, y_pred: sklearn.metrics.accuracy_score(
+            y_true,
+            np.argmax(y_pred, axis=-1),
         )
     
     # Proceed to do and end-to-end model in case we want to
@@ -144,11 +143,17 @@ def train_ccd(
         logging.debug(prefix + "\tModel pre-training completed")
             
     logging.info(prefix + "\tEvaluating end-to-end pretrained model")
+    end_to_end_preds = end_to_end_model.predict(
+        x_test,
+        batch_size=experiment_config["batch_size"],
+    )
     if experiment_config["num_outputs"] > 1:
-        preds = scipy.special.softmax(
-            end_to_end_model.predict(x_test),
-            axis=-1,
-        )
+        preds = end_to_end_preds
+        if np.min(preds) < 0.0 or np.max(preds) > 1:
+            preds = scipy.special.softmax(
+                preds,
+                axis=-1,
+            )
 
         one_hot_labels = tf.keras.utils.to_categorical(y_test)
         end_results['pre_train_acc'] = sklearn.metrics.accuracy_score(
@@ -163,17 +168,25 @@ def train_ccd(
             multi_class='ovo',
         )
     else:
+        if np.min(end_to_end_preds) < 0.0 or np.max(end_to_end_preds) > 1:
+            # Then we assume that we have outputed logits
+            end_to_end_preds = tf.math.sigmoid(end_to_end_preds).numpy()
         end_results['pre_train_acc'] = sklearn.metrics.accuracy_score(
             y_test,
-            end_to_end_model.predict(x_test),
+            (end_to_end_preds >= 0.5).astype(np.int32),
         )
         end_results['pre_train_auc'] = sklearn.metrics.roc_auc_score(
             y_test,
-            end_to_end_model.predict(x_test),
+            (end_to_end_preds >= 0.5).astype(np.int32),
         )
     logging.debug(prefix + f"\t\tPretrained model task accuracy: {end_results['pre_train_acc']*100:.2f}%")
     
     # Now extract our concept vectors
+    def derp(y_true, y_pred):
+        return tf.keras.metrics.binary_accuracy(
+            y_true,
+            tf.cast(tf.math.sigmoid(y_pred) >= 0.5, tf.int32)
+        )
     topic_model = CCD.TopicModel(
         concepts_to_labels_model=decoder,
         n_channels=experiment_config["latent_dims"],
@@ -199,7 +212,10 @@ def train_ccd(
                     y_true,
                     y_pred,
                 )
-            ) if experiment_config["num_outputs"] > 1 else tf.keras.metrics.binary_accuracy
+            ) if experiment_config["num_outputs"] > 1 else derp #lambda y_true, y_pred: tf.keras.metrics.binary_accuracy(
+#                 y_true,
+#                 tf.cast(y_pred >= 0.5, tf.int32),
+#             )
         ),
     )
     topic_model.compile(
@@ -254,9 +270,13 @@ def train_ccd(
             ],
         else:
             callbacks = [early_stopping_monitor]
+        train_encodings = encoder.predict(
+            x_train,
+            batch_size=experiment_config["batch_size"],
+        )
         ccd_hist, ccd_time_trained = utils.timeit(
             topic_model.fit,
-            x=encoder(x_train),
+            x=train_encodings,
             y=y_train,
             callbacks=callbacks,
             epochs=experiment_config["max_epochs"],
@@ -293,9 +313,14 @@ def train_ccd(
 
     # Evaluate CCD's topic model
     logging.info(prefix + "\tEvaluating CCD's topic model")
-    test_output, test_concept_scores = topic_model(encoder(x_test))
-    test_concept_scores = test_concept_scores.numpy()
-    test_output = test_output.numpy()
+    test_encodings = encoder.predict(
+        x_test,
+        batch_size=experiment_config["batch_size"],
+    )
+    test_output, test_concept_scores = topic_model.predict(
+        test_encodings,
+        batch_size=experiment_config["batch_size"],
+    )
     if experiment_config["num_outputs"] > 1:
         # Then lets apply a softmax activation over all the probability
         # classes
@@ -317,17 +342,23 @@ def train_ccd(
             multi_class='ovo',
         )
     else:
+        preds = test_output
+        if np.min(preds) < 0.0 or np.max(preds) > 1:
+            # Then we assume that we have outputed logits
+            preds = tf.math.sigmoid(preds).numpy()
         end_results['acc'] = sklearn.metrics.accuracy_score(
             y_test,
-            test_output,
+            (preds >= 0.5).astype(np.int32),
         )
         end_results['auc'] = sklearn.metrics.roc_auc_score(
             y_test,
-            test_output,
+            (preds >= 0.5).astype(np.int32),
         )
     
     # Compute the CAS score
-    if c_test is not None:
+    if (not experiment_config.get('continuous_concepts', False)) and (
+        c_test is not None
+    ):
         end_results['cas'], end_results['cas_task'], end_results['best_alignment'] = utils.posible_load(
             key=['cas', 'cas_task', 'best_alignment'],
             old_results=old_results,
@@ -339,6 +370,19 @@ def train_ccd(
                 step=experiment_config.get('cas_step', 2),
             ),
         )
+        
+        # Compute correlation between bottleneck entries and ground truch concepts
+        logging.debug(prefix + "\t\tConcept correlation matrix...")
+        end_results['concept_corr_mat'] = utils.posible_load(
+            key='concept_corr_mat',
+            old_results=old_results,
+            load_from_cache=load_from_cache,
+            run_fn=lambda: metrics.correlation_alignment(
+                scores=test_concept_scores,
+                c_test=c_test,
+            ),
+        )
+        logging.debug(prefix + f"\t\t\tDone")
     
     # Let's see our topic model's completeness
     logging.debug(prefix + f"\t\tComputing CCD's completeness scores...")

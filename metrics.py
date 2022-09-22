@@ -172,6 +172,10 @@ def find_best_independent_alignment(scores, c_train):
     purity_mat = np.abs(np.corrcoef(np.hstack([scores, c_train]).T)[:n_concepts, n_concepts:])
     return np.argmax(purity_mat, axis=1), np.max(purity_mat, axis=1)
 
+def correlation_alignment(scores, c_test):
+    n_concepts = scores.shape[-1]
+    return np.abs(np.corrcoef(np.hstack([scores, c_test]).T)[:n_concepts, n_concepts:])
+
 def embedding_homogeneity(
     c_vec,
     c_test,

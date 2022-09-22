@@ -217,18 +217,28 @@ def experiment_loop(
                 )
             logging.debug(f"\tDone!")
             
+        logging.debug(f"\tx_train shape is {x_train.shape} and type is {x_train.dtype}")
+        logging.debug(f"\tx_test shape is {x_test.shape} and type is {x_test.dtype}")
+        logging.debug(f"\ty_train shape is {y_train.shape} and type is {y_train.dtype}")
+        logging.debug(f"\ty_test shape is {y_test.shape} and type is {y_test.dtype}")
+        if c_train is not None:
+            logging.debug(f"\tc_train shape is {c_train.shape} and type is {c_train.dtype}")
+        if c_test is not None:
+            logging.debug(f"\tc_test shape is {c_test.shape} and type is {c_test.dtype}")
         logging.info(
-            f"Train class distribution: {np.mean(tf.keras.utils.to_categorical(y_train), axis=0)}"
+            f"\tTrain class distribution: {np.mean(tf.keras.utils.to_categorical(y_train), axis=0)}"
         )
         logging.info(
-            f"Test class distribution: {np.mean(tf.keras.utils.to_categorical(y_test), axis=0)}"
+            f"\tTest class distribution: {np.mean(tf.keras.utils.to_categorical(y_test), axis=0)}"
         )
-        logging.info(
-            f"Train concept distribution: {np.mean(c_train, axis=0)}"
-        )
-        logging.info(
-            f"Test concept distribution: {np.mean(c_test, axis=0)}"
-        )
+        if c_train is not None:
+            logging.info(
+                f"\tTrain concept distribution: {np.mean(c_train, axis=0)}"
+            )
+        if c_test is not None:
+            logging.info(
+                f"\tTest concept distribution: {np.mean(c_test, axis=0)}"
+            )
         for current_config in experiment_config['runs']:
             if restart_gpu_on_run_trial:
                 device = cuda.get_current_device()
@@ -258,9 +268,9 @@ def experiment_loop(
                                               
             trial_config.update(current_config)
             trial_config.update(extra_hypers)
-            _evaluate_expressions(trial_config)
             # Now time to iterate over all hyperparameters that were given as part
             for run_config in _generate_hyperatemer_configs(trial_config):
+                _evaluate_expressions(run_config)
                 # Find the model which we will be using
                 arch = run_config['model']
                 arch_name = arch.lower().strip()
