@@ -14,6 +14,7 @@ import scsim
 import itertools
 from pathlib import Path
 import joblib
+import tensorflow_datasets as tfds
 
 ###################################
 ## Synthetic Tabular Dataset
@@ -377,6 +378,113 @@ def generate_forest_cover_data(
         y_train,
         y_test,
     )
+
+
+###################################
+## Higgs dataset
+###################################
+
+def generate_higgs_data(
+    include_high_level=True,
+    test_percent=0.2,
+    seed=42,
+    load_batch_size=8096,
+    dataset_dir="data/higgs_numpy"
+):
+    if os.path.exists(os.path.join(dataset_dir, "X_train.npy")):
+        X_train = np.load(os.path.join(dataset_dir, "X_train.npy"))
+        X_test = np.load(os.path.join(dataset_dir, "X_test.npy"))
+        y_train = np.load(os.path.join(dataset_dir, "y_train.npy"))
+        y_test = np.load(os.path.join(dataset_dir, "y_test.npy"))
+        c_train = np.load(os.path.join(dataset_dir, "c_train.npy"))
+        c_test = np.load(os.path.join(dataset_dir, "c_test.npy"))
+        # Redo the sampling to respect the seed selection and also
+        # any possible changes in test percents!
+        X_train, X_test, y_train, y_test, c_train, c_test = train_test_split(
+            np.concatenate([X_train, X_test], axis=0),
+            np.concatenate([y_train, y_test], axis=0),
+            np.concatenate([c_train, c_test], axis=0),
+            test_size=test_percent,
+            random_state=seed,
+        )
+    else:
+        # Else let's generate the data from scratch
+        high_level_feats = sorted([
+            'm_bb',
+            'm_jj',
+            'm_jjj',
+            'm_jlv',
+            'm_lv',
+            'm_wbb',
+            'm_wwbb',
+        ])
+        prev = os.environ.get("CUDA_VISIBLE_DEVICES", None)
+        # Ignote GPU to avoid flooding it with data
+        os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
+        print("Loading Higgs dataset...")
+        ds = tfds.load('higgs', split='train', shuffle_files=True)
+        print("\tDone")
+        ds = ds.batch(load_batch_size)
+        Xs = [None for _ in range(len(ds))]
+        ys = [None for _ in range(len(ds))]
+        Cs = [None for _ in range(len(ds))]
+
+        print("Generating Higgs matrices...")
+        ds_numpy = tfds.as_numpy(ds)
+        print("\tTurned to numpy")
+        for i, x in enumerate(ds_numpy):
+            print(f'{(i + 1)/len(ds) * 100:.2f}% (size {i + 1})', end="\r")
+            feats = sorted(x.keys())
+            tensor = []
+            concepts = []
+            for feat_name in feats:
+                if feat_name == "class_label":
+                    y = x[feat_name]
+                elif feat_name in high_level_feats:
+                    concepts.append(x[feat_name])
+                else:
+                    tensor.append(x[feat_name])
+            ys[i] = np.array(y)
+            Xs[i] = np.array(tensor).T
+            Cs[i] = np.array(concepts).T
+        print("\tDone!")
+        X = np.concatenate(Xs, axis=0)
+        y = np.concatenate(ys, axis=0)
+        C = np.concatenate(Cs, axis=0)
+        if prev is not None:
+            os.environ["CUDA_VISIBLE_DEVICES"] = prev
+        else:
+            del os.environ["CUDA_VISIBLE_DEVICES"]
+        X_train, X_test, y_train, y_test, c_train, c_test = train_test_split(
+            X,
+            y,
+            C,
+            test_size=test_percent,
+            random_state=seed,
+        )
+        if dataset_dir:
+            Path(dataset_dir).mkdir(parents=True, exist_ok=True)
+            for var_name, var in [
+                ('X_train', X_train),
+                ('X_test', X_test),
+                ('y_train', y_train),
+                ('y_test', y_test),
+                ('c_train', c_train),
+                ('c_test', c_test),
+            ]:
+                np.save(
+                    os.path.join(dataset_dir, var_name + f".npy"),
+                    var,
+                )
+    if not include_high_level:
+        return X_train, X_test, y_train.astype(np.int32), y_test.astype(np.int32), c_train, c_test
+    
+    # Else let's put everything back into the same array
+    X_train = np.concatenate([X_train, c_train], axis=-1)
+    X_test = np.concatenate([X_test, c_test], axis=-1)
+    return X_train, X_test, y_train, y_test
+
 
 
 ###################################
