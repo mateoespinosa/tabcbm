@@ -14,7 +14,7 @@ from concepts_xai.methods.CBM.CBModel import (
     JointConceptBottleneckModel,
     BypassJointCBM,
 )
-
+import training.representation_evaluation as representation_evaluation
 import training.utils as utils
 
 ############################################
@@ -414,33 +414,16 @@ def train_cbm(
             ),
         )
         
-        # Compute the CAS score
-        logging.debug(prefix + "\t\tPredicting CAS...")
-        end_results['cas'], end_results['cas_task'], end_results['best_alignment'] = utils.posible_load(
-            key=['cas', 'cas_task', 'best_alignment'],
+        representation_evaluation.evaluate_concept_representations(
+            end_results=end_results,
+            experiment_config=experiment_config,
+            test_concept_scores=test_concept_scores,
+            c_test=c_test,
+            y_test=y_test,
             old_results=old_results,
             load_from_cache=load_from_cache,
-            run_fn=lambda: metrics.embedding_homogeneity(
-                c_vec=test_concept_scores,
-                c_test=c_test,
-                y_test=y_test,
-                step=experiment_config.get('cas_step', 2),
-            ),
+            prefix=prefix,
         )
-        logging.debug(prefix + f"\t\t\tDone with CAS = {end_results['cas'] * 100:.2f}%")
-        
-        # Compute correlation between bottleneck entries and ground truch concepts
-        logging.debug(prefix + "\t\tConcept correlation matrix...")
-        end_results['concept_corr_mat'] = utils.posible_load(
-            key='concept_corr_mat',
-            old_results=old_results,
-            load_from_cache=load_from_cache,
-            run_fn=lambda: metrics.correlation_alignment(
-                scores=test_concept_scores,
-                c_test=c_test,
-            ),
-        )
-        logging.debug(prefix + f"\t\t\tDone")
         
         if experiment_config.get('perform_interventions', True):
             # Then time to do some interventions!

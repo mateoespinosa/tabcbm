@@ -11,6 +11,7 @@ from keras import backend as K
 import logging
 
 import training.utils as utils
+import training.representation_evaluation as representation_evaluation
 
 
 ############################################
@@ -359,30 +360,16 @@ def train_ccd(
     if (not experiment_config.get('continuous_concepts', False)) and (
         c_test is not None
     ):
-        end_results['cas'], end_results['cas_task'], end_results['best_alignment'] = utils.posible_load(
-            key=['cas', 'cas_task', 'best_alignment'],
+        representation_evaluation.evaluate_concept_representations(
+            end_results=end_results,
+            experiment_config=experiment_config,
+            test_concept_scores=test_concept_scores,
+            c_test=c_test,
+            y_test=y_test,
             old_results=old_results,
             load_from_cache=load_from_cache,
-            run_fn=lambda: metrics.embedding_homogeneity(
-                c_vec=test_concept_scores,
-                c_test=c_test,
-                y_test=y_test,
-                step=experiment_config.get('cas_step', 2),
-            ),
+            prefix=prefix,
         )
-        
-        # Compute correlation between bottleneck entries and ground truch concepts
-        logging.debug(prefix + "\t\tConcept correlation matrix...")
-        end_results['concept_corr_mat'] = utils.posible_load(
-            key='concept_corr_mat',
-            old_results=old_results,
-            load_from_cache=load_from_cache,
-            run_fn=lambda: metrics.correlation_alignment(
-                scores=test_concept_scores,
-                c_test=c_test,
-            ),
-        )
-        logging.debug(prefix + f"\t\t\tDone")
     
     # Let's see our topic model's completeness
     logging.debug(prefix + f"\t\tComputing CCD's completeness scores...")

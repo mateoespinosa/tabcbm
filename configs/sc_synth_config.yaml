@@ -31,12 +31,29 @@ shared_params:
     usable_concept_threshold: 0.85
 
 runs:
+    - model: 'CBM'
+      pretrain_epochs: 100
+      include_bn: True
+      pass_concept_logits: False
+      concept_loss_weight: [0.1, 5]
+      n_supervised_concepts: [1, 3, 5, 7, 9, 11]
+      concept_supervision_annotated_fraction: [0.25, 1]
+      n_concepts: "{{n_ground_truth_concepts}}"
+      aggr_key: "{model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction}, c_weight={concept_loss_weight})"
+      extra_name: "k_{n_concepts}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}_c_weight_{concept_loss_weight}"
+      patience: 250
+      grid_variables:
+          - n_supervised_concepts
+          - concept_supervision_annotated_fraction
+          - concept_loss_weight
+      grid_search_mode: exhaustive
+      
     - model: 'TabNet'
       pretrain_epochs: 100
-      n_d: 8
-      n_a: 8
-      n_steps: 3
-      gamma: 1.3
+      n_d: [8, 64]
+      n_a: [8, 64]
+      n_steps: [3, 5]
+      gamma: [1.3, 1.5]
       momentum: 0.02
       lambda_sparse: 1.0E-3
       initial_lr: 0.02
@@ -45,24 +62,16 @@ runs:
       decay_step_size: 10
       pretraining_ratio: 0.8
       eps: 1.0E-15
-
-    - model: 'TabNet'
-      pretrain_epochs: 100
-      n_d: 64
-      n_a: 64
-      n_steps: 5
-      gamma: 1.5
-      momentum: 0.02
-      lambda_sparse: 1.0E-3
-      initial_lr: 0.02
-      decay_rate: 0.9
-      virtual_batch_size: 128
-      decay_step_size: 10
-      pretraining_ratio: 0.8
-      eps: 1.0E-15
-      extra_name: 'large'
-      aggr_key: "{model} Large"
-
+      extra_name: ['', 'large']
+      aggr_key: ["{model}", "{model} Large"]
+      grid_variables:
+          - n_d
+          - n_a
+          - n_steps
+          - gamma
+          - extra_name
+          - aggr_key
+      grid_search_mode: paired
 
     - model: 'TabCBM'
       pretrain_epochs: 50
@@ -87,241 +96,13 @@ runs:
       extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}"
       patience: 750
       max_epochs: 3000
-      concept_supervision_annotated_fraction: 0.25
-      n_supervised_concepts: 1
+      concept_supervision_annotated_fraction: [0.25, 1]
+      n_supervised_concepts: [1, 3, 5, 7, 9, 11]
       concept_prediction_weight: 1
-
-    - model: 'TabCBM'
-      pretrain_epochs: 50
-      self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
-
-      coherence_reg_weight: 1
-      diversity_reg_weight: 10
-      feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
-      gate_estimator_weight: 10
-
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
-      top_k: 102
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction})"
-      extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}"
-      patience: 750
-      max_epochs: 3000
-      concept_supervision_annotated_fraction: 0.25
-      n_supervised_concepts: 3
-      concept_prediction_weight: 1
-
-    - model: 'TabCBM'
-      pretrain_epochs: 50
-      self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
-
-      coherence_reg_weight: 1
-      diversity_reg_weight: 10
-      feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
-      gate_estimator_weight: 10
-
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
-      top_k: 102
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction})"
-      extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}"
-      patience: 750
-      max_epochs: 3000
-      concept_supervision_annotated_fraction: 0.25
-      n_supervised_concepts: 5
-      concept_prediction_weight: 1
-
-    - model: 'TabCBM'
-      pretrain_epochs: 50
-      self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
-
-      coherence_reg_weight: 1
-      diversity_reg_weight: 10
-      feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
-      gate_estimator_weight: 10
-
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
-      top_k: 102
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction})"
-      extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}"
-      patience: 750
-      max_epochs: 3000
-      concept_supervision_annotated_fraction: 0.25
-      n_supervised_concepts: 7
-      concept_prediction_weight: 1
-
-    - model: 'TabCBM'
-      pretrain_epochs: 50
-      self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
-
-      coherence_reg_weight: 1
-      diversity_reg_weight: 10
-      feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
-      gate_estimator_weight: 10
-
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
-      top_k: 102
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction})"
-      extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}"
-      patience: 750
-      max_epochs: 3000
-      concept_supervision_annotated_fraction: 0.25
-      n_supervised_concepts: 9
-      concept_prediction_weight: 1
-
-    - model: 'TabCBM'
-      pretrain_epochs: 50
-      self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
-
-      coherence_reg_weight: 1
-      diversity_reg_weight: 10
-      feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
-      gate_estimator_weight: 10
-
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
-      top_k: 102
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction})"
-      extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}"
-      patience: 750
-      max_epochs: 3000
-      concept_supervision_annotated_fraction: 0.25
-      n_supervised_concepts: 11
-      concept_prediction_weight: 1
-
-
-    - model: 'TabCBM'
-      pretrain_epochs: 50
-      self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
-
-      coherence_reg_weight: 1
-      diversity_reg_weight: 10
-      feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
-      gate_estimator_weight: 10
-
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
-      top_k: 102
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs})"
-      extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}"
-      patience: 750
-      max_epochs: 3000
-    
-    - model: 'TabCBM'
-      pretrain_epochs: 50
-      self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
-
-      coherence_reg_weight: 0
-      diversity_reg_weight: 10
-      feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
-      gate_estimator_weight: 10
-
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
-      top_k: 102
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, weights=({coherence_reg_weight}, {diversity_reg_weight}, {feature_selection_reg_weight}))"
-      extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_weights_{coherence_reg_weight}_{diversity_reg_weight}_{feature_selection_reg_weight}"
-      patience: 750
-      max_epochs: 3000
-  
-    - model: 'TabCBM'
-      pretrain_epochs: 100
-      self_supervised_train_epochs: 0
-      use_concept_embedding: False
-      end_to_end_training: True
-
-      coherence_reg_weight: 1
-      diversity_reg_weight: 10
-      feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
-      gate_estimator_weight: 10
-
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
-      top_k: 102
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (no_pretrain, k={n_concepts}, patience={patience}, epochs={max_epochs}, weights=({coherence_reg_weight}, {diversity_reg_weight}, {feature_selection_reg_weight}))"
-      extra_name: "no_pretrain_k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_weights_{coherence_reg_weight}_{diversity_reg_weight}_{feature_selection_reg_weight}"
-      patience: 750
-      max_epochs: 3000
-
-    - model: 'TabCBM'
-      pretrain_epochs: 50
-      self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
-
-      coherence_reg_weight: 1
-      diversity_reg_weight: 1
-      feature_selection_reg_weight: 1
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
-      gate_estimator_weight: 10
-
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
-      top_k: 102
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, weights=({coherence_reg_weight}, {diversity_reg_weight}, {feature_selection_reg_weight}))"
-      extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_weights_{coherence_reg_weight}_{diversity_reg_weight}_{feature_selection_reg_weight}"
-      patience: 500
-      max_epochs: 3000
+      grid_variables:
+          - concept_supervision_annotated_fraction
+          - n_supervised_concepts
+      grid_search_mode: exhaustive
 
     - model: 'TabCBM'
       pretrain_epochs: 50
@@ -346,7 +127,10 @@ runs:
       extra_name: "k_{n_concepts}_bn_{include_bn}_partience_{patience}_epochs_{max_epochs}"
       patience: 750
       max_epochs: 3000
-      include_bn: True
+      include_bn: [False, True]
+      grid_variables:
+          - include_bn
+      grid_search_mode: exhaustive
 
     - model: 'TabCBM'
       pretrain_epochs: 50
@@ -371,89 +155,126 @@ runs:
       extra_name: "k_{n_concepts}_bn_{include_bn}_partience_{patience}_epochs_{max_epochs}_weights_{coherence_reg_weight}_{diversity_reg_weight}_{feature_selection_reg_weight}"
       patience: 500
       max_epochs: 3000
-      include_bn: True
+      include_bn: [False, True]
+      grid_variables:
+          - include_bn
+      grid_search_mode: exhaustive
+
+    - model: 'TabCBM'
+      pretrain_epochs: 50
+      self_supervised_train_epochs: 50
+      use_concept_embedding: False
+      end_to_end_training: True
+
+      coherence_reg_weight: 0
+      diversity_reg_weight: 10
+      feature_selection_reg_weight: 10
+      contrastive_reg_weight: 0
+      prob_diversity_reg_weight: 0
+      gate_estimator_weight: 10
+
+      n_exclusive_concepts: 0
+      zero_mask: True
+      normalized_scores: True
+      temperature: 1
+      top_k: 102
+      n_concepts: "{{n_ground_truth_concepts}}"
+      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, weights=({coherence_reg_weight}, {diversity_reg_weight}, {feature_selection_reg_weight}))"
+      extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_weights_{coherence_reg_weight}_{diversity_reg_weight}_{feature_selection_reg_weight}"
+      patience: 750
+      max_epochs: 3000
+
+    - model: 'TabCBM'
+      pretrain_epochs: 100
+      self_supervised_train_epochs: 0
+      use_concept_embedding: False
+      end_to_end_training: True
+
+      coherence_reg_weight: 1
+      diversity_reg_weight: 10
+      feature_selection_reg_weight: 10
+      contrastive_reg_weight: 0
+      prob_diversity_reg_weight: 0
+      gate_estimator_weight: 10
+
+      n_exclusive_concepts: 0
+      zero_mask: True
+      normalized_scores: True
+      temperature: 1
+      top_k: 102
+      n_concepts: "{{n_ground_truth_concepts}}"
+      aggr_key: "{model} (no_pretrain, k={n_concepts}, patience={patience}, epochs={max_epochs}, weights=({coherence_reg_weight}, {diversity_reg_weight}, {feature_selection_reg_weight}))"
+      extra_name: "no_pretrain_k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_weights_{coherence_reg_weight}_{diversity_reg_weight}_{feature_selection_reg_weight}"
+      patience: 750
+      max_epochs: 3000
 
     - model: 'MLP'
-
-    - model: 'MLP'
-      encoder_units: [64, 64, 64]
-      decoder_units: [64, 64]
-      extra_name: "large"
-      mlp_extra_units: [16]
-      aggr_key: "{model} Large"
+      encoder_units: [[128, 64], [64, 64, 64]]
+      decoder_units: [[64, 32], [64, 64]]
+      extra_name: ["", "large"]
+      mlp_extra_units: [[], [16]]
+      aggr_key: ["{model}", "{model} Large"]
+      grid_variables:
+          - aggr_key
+          - extra_name
+          - mlp_extra_units
+          - decoder_units
+          - encoder_units
+      grid_search_mode: paired
 
     - model: 'XGBoost'
       extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
       aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
       nthread: 6
       learning_rate: 1.0E-2
-      max_depth: 5
-
-    - model: 'XGBoost'
-      extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
-      aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
-      nthread: 6
-      learning_rate: 1.0E-2
-      max_depth: 10
+      max_depth: [5, 10]
+      grid_variables:
+          - max_depth
+      grid_search_mode: paired
 
     - model: 'LightGBM'
       extra_name: 'max_depth_{max_depth}'
       aggr_key: "{model} (d={max_depth})"
       nthread: 4
       learning_rate: 0.01
-      max_depth: 5
-      num_leaves: 32
+      max_depth: [5, 10]
+      num_leaves: [32, 1024]
       verbosity: -1
-
-    - model: 'LightGBM'
-      extra_name: 'max_depth_{max_depth}'
-      aggr_key: "{model} (d={max_depth})"
-      nthread: 4
-      learning_rate: 0.01
-      max_depth: 10
-      num_leaves: 1024
-      verbosity: -1
+      grid_variables:
+          - max_depth
+          - num_leaves
+      grid_search_mode: paired
 
     - model: 'SENN'
       pretrain_autoencoder_epochs: 100
       regularization_strength: 0.1
       sparsity_strength: 2.0E-5
-      coefficient_model_units: [64, 64]
-      encoder_units: [64, 64, 64]
-      decoder_units: [64, 64]
-      latent_dims: 64
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} Large (k={n_concepts})"
-      extra_name: "_large_k_{n_concepts}"
-
-    - model: 'SENN'
-      pretrain_autoencoder_epochs: 100
-      regularization_strength: 0.1
-      sparsity_strength: 2.0E-5
-      coefficient_model_units: [16, 16]
       n_concepts: "{{n_ground_truth_concepts}}"
       aggr_key: "{model} (k={n_concepts})"
-      extra_name: "k_{n_concepts}"
+      extra_name: ["k_{n_concepts}", "_large_k_{n_concepts}"]
+      coefficient_model_units: [[16, 16], [64, 64]]
+      encoder_units: [[128, 64], [64, 64, 64]]
+      decoder_units: [[64, 32], [64, 64]]
+      grid_variables:
+          - encoder_units
+          - decoder_units
+          - coefficient_model_units
+          - extra_name
+      grid_search_mode: paired
 
     - model: 'CCD'
       pretrain_epochs: 150
       n_concepts: "{{n_ground_truth_concepts}}"
       aggr_key: "{model} (k={n_concepts})"
-      extra_name: "k_{n_concepts}"
+      extra_name: ["k_{n_concepts}", "large_k_{n_concepts}"]
       lambda1: 0.1
       lambda2: 0.1
       top_k: 256
       threshold: 0.0
-
-    - model: 'CCD'
-      pretrain_epochs: 150
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} Large (k={n_concepts})"
-      extra_name: "large_k_{n_concepts}"
-      encoder_units: [64, 64, 64]
-      decoder_units: [64, 64]
-      latent_dims: 64
-      lambda1: 0.1
-      lambda2: 0.1
-      top_k: 256
-      threshold: 0.0
+      encoder_units: [[128, 64], [64, 64, 64]]
+      decoder_units: [[64, 32], [64, 64]]
+      grid_variables:
+          - encoder_units
+          - decoder_units
+          - extra_name
+      grid_search_mode: paired
