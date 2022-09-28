@@ -2,6 +2,7 @@ import os
 import sklearn
 import scipy
 import tensorflow as tf
+import pandas as pd
 import numpy as np
 from collections import defaultdict
 import matplotlib.pyplot as plt
@@ -349,6 +350,80 @@ def generate_synthetic_sc_dataset(
         ground_truth_concept_masks,
         adata
     )
+
+
+###################################
+## PBMC
+###################################
+
+
+def generate_pbmc_data(
+    seed=0,
+    test_percent=0.2,
+    plot=False,
+    min_cells=200, #50,
+    min_genes=200,
+    min_counts=500, #200,
+    n_pcs=32,
+    n_neighbors=100,
+    dataset_dir="data/pbmc/",
+):
+    counts = scipy.sparse.load_npz(os.path.join(dataset_dir, "X.npz")).toarray()
+    labels = scipy.sparse.load_npz(os.path.join(dataset_dir, "y.npz")).toarray()
+    labels = np.reshape(labels, -1)
+    obs = pd.DataFrame(data=labels,columns=["label"])
+    print(obs)
+    adata = ad.AnnData(counts, obs=obs)
+    # And add a label based on the activity and identity programs generates
+    adata.obs['label_str'] = [f'class_{x}' for x in adata.obs['label']]
+    
+    sc.pp.filter_cells(adata, min_genes=min_genes)
+    sc.pp.filter_cells(adata, min_counts=200)
+    kept_gene_mask, num_per_gene = sc.pp.filter_genes(adata, min_cells=min_cells, inplace=False)
+    sc.pp.filter_genes(adata, min_cells=min_cells, inplace=True)
+    sc.pp.normalize_per_cell(adata)
+    sc.pp.log1p(adata)
+    
+    # Mean and variance normalize the genes
+    sc.pp.scale(adata, zero_center=False)
+    adata.raw = adata.copy()
+    
+    # Run PCA
+    sc.pp.pca(adata)
+    
+    if plot:
+        # Make a scree plot to determine number of PCs to use for UMAP
+        sc.pl.pca_variance_ratio(adata, log=True)
+    
+    # Construct the nearest neighbor graph for UMAP
+    sc.pp.neighbors(adata, n_neighbors=n_neighbors, n_pcs=n_pcs)
+    
+    # Run UMAP
+    sc.tl.umap(adata)
+    
+    # Plot the UMAP with some cannonical marker genes to see that the apparent clustering makes sense
+    if plot:
+        sc.pl.umap(
+            adata,
+            color='label_str',
+            use_raw=True,
+            ncols=3,
+            title='Task Label Annotations',
+        )
+    
+    # And produce the training data we will all love and use
+    X_train = adata.to_df().to_numpy()
+    y_train = adata.obs["label"].to_numpy()
+
+    # Split it up into test/train splits
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_train,
+        y_train,
+        test_size=test_percent,
+        random_state=seed,
+    )
+    
+    return (X_train, X_test, y_train, y_test)
 
 ###################################
 ## Forest Cover Dataset

@@ -33,6 +33,18 @@ def posible_load(
     keys = key
     if not isinstance(keys, (list, tuple)):
         keys = [key]
+    
+    if os.environ.get("RERUN_METRICS", ""):
+        metrics_to_rerun = os.environ.get("RERUN_METRICS", "")
+        metrics_to_rerun = list(map(
+            lambda x: x.strip().lower(),
+            metrics_to_rerun.split(","),
+        ))
+        for key in keys:
+            if key.lower().strip() in metrics_to_rerun:
+                # Then let's overwrite the load from cache
+                load_from_cache = False
+                break
         
     if old_results and load_from_cache:
         result = []

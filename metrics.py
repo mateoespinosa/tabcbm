@@ -128,7 +128,6 @@ def brute_force_concept_aucs(
     concept_scores,
     c_test,
     reduction=np.mean,
-    thresh=None,
     alignment=None,
 ):
     result = {}

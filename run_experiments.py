@@ -288,6 +288,8 @@ def main(
         data_generator = data.generate_forest_cover_data
     elif ds_name == "higgs":
         data_generator = data.generate_higgs_data
+    elif ds_name == "pbmc":
+        data_generator = data.generate_pbmc_data
     else:
         used = experiment_config['dataset']
         raise ValueError(f'Unrecognized dataset name "{used}"')

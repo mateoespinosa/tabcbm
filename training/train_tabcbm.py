@@ -217,6 +217,7 @@ def train_tabcbm(
         concept_generator_units=experiment_config.get('concept_generator_units', [64]),
         rec_model_units=experiment_config.get('rec_model_units', [64]),
         force_generator_inclusion=experiment_config.get('force_generator_inclusion', True),
+        efficient_self_supervised=experiment_config.get('efficient_self_supervised', False),
     )
     tabcbm_model_path = os.path.join(
         experiment_config["results_dir"],
@@ -347,6 +348,8 @@ def train_tabcbm(
                 ]
             else:
                 callbacks = [early_stopping_monitor]
+            ss_tabcbm(x_test[:2, :])
+            ss_tabcbm.summary()
             ss_tabcbm_hist, ss_tabcbm_time_trained = utils.timeit(
                 ss_tabcbm.fit,
                 x=x_train,

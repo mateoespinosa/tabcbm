@@ -38,6 +38,7 @@ class TabCBM(tf.keras.Model):
         n_supervised_concepts=0,
         
         self_supervised_mode=False,
+        efficient_self_supervised=False,
         # For legacy models set this to True
         force_generator_inclusion=True,
         g_model=None,
@@ -204,7 +205,9 @@ class TabCBM(tf.keras.Model):
             initializer=initial_mask,
             trainable=True,
         )
-
+        
+        rec_model_mask = None
+        rec_model_vars = None
         for i in range(self.n_concepts):
             # For each concept we will have a simple MLP that maps
             # the masked input to the concept's input latent space. This will
@@ -248,8 +251,11 @@ class TabCBM(tf.keras.Model):
             if self_supervised_mode or force_generator_inclusion:
                 # Initialize the mask and value reconstruction models which will be in charge
                 # of reconstructing the input from its masked version
-                self.rec_values_models.append(tf.keras.models.Sequential(
-                    (
+                if (not efficient_self_supervised) or (
+                    (rec_model_vars is None) or
+                    (rec_model_mask is None)
+                ):
+                    layers = (
                         [
                             tf.keras.layers.Dense(
                                 acts,
@@ -260,34 +266,39 @@ class TabCBM(tf.keras.Model):
                         [
                             tf.keras.layers.Dense(
                                 input_shape[-1],
-                                activation=None,
+                                activation=None,  # The sigmoid will be implicit in the loss function
                             ),
                         ]
-                    ),
-                    name=f"rec_values_model_{i}",
-                ))
-                self.rec_values_models[-1].compile()
-
-                layers = (
-                    [
-                        tf.keras.layers.Dense(
-                            acts,
-                            activation='relu'
-                        )
-                        for acts in rec_model_units
-                    ] + 
-                    [
-                        tf.keras.layers.Dense(
-                            input_shape[-1],
-                            activation=None,  # The sigmoid will be implicit in the loss function
+                    )
+                    rec_model_mask = tf.keras.models.Sequential(
+                        layers,
+                        name="rec_mask_model",
+                    )
+                    rec_model_mask.compile()
+                    
+                    rec_model_vars = tf.keras.models.Sequential(
+                        (
+                            [
+                                tf.keras.layers.Dense(
+                                    acts,
+                                    activation='relu'
+                                )
+                                for acts in rec_model_units
+                            ] + 
+                            [
+                                tf.keras.layers.Dense(
+                                    input_shape[-1],
+                                    activation=None,
+                                ),
+                            ]
                         ),
-                    ]
-                )
-                self.rec_mask_models.append(tf.keras.models.Sequential(
-                    layers,
-                    name="rec_mask_model",
-                ))
-                self.rec_mask_models[-1].compile()
+                        name=f"rec_values_model_{i}",
+                    )
+                    rec_model_vars.compile()
+                    
+                
+                self.rec_values_models.append(rec_model_vars)
+                self.rec_mask_models.append(rec_model_mask)
                 
     @property
     def metrics(self):
