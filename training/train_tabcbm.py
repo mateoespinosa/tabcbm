@@ -692,6 +692,9 @@ def train_tabcbm(
     end_results['avg_num_of_features_per_concept'] = np.mean(
         np.sum(masks >= 0.5, axis=-1)
     )
+    end_results['num_unused_features'] = np.count_nonzero(
+        np.sum(masks >= 0.5, axis=0) == 0
+    )
     
     if (ground_truth_concept_masks is not None) and (c_train is not None) and (
         c_test is not None

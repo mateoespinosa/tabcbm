@@ -413,7 +413,7 @@ def generate_pbmc_data(
     
     # And produce the training data we will all love and use
     X_train = adata.to_df().to_numpy()
-    y_train = adata.obs["label"].to_numpy()
+    y_train = adata.obs["label"].to_numpy().astype(np.int32)
 
     # Split it up into test/train splits
     X_train, X_test, y_train, y_test = train_test_split(

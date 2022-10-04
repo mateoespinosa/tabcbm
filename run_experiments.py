@@ -113,6 +113,15 @@ def build_parser():
         ),
     )
     parser.add_argument(
+        '--force_single_process',
+        action='store_true',
+        default=False,
+        help=(
+            "If true then all training runs will be done in a single process. This may result in the "
+            "GPU becoming overloaded so use with caution."
+        ),
+    )
+    parser.add_argument(
         '--output_dir',
         '-o',
         default=None,
@@ -174,6 +183,7 @@ def main(
     result_table_fields=None,
     sort_key="model",
     print_cache_only=False,
+    multiprocess_inference=True,
     **kwargs,
 ):
     
@@ -309,6 +319,7 @@ def main(
         result_table_fields=result_table_fields,
         sort_key=sort_key,
         print_cache_only=print_cache_only,
+        multiprocess_inference=multiprocess_inference,
     )
     return 0
 
@@ -331,4 +342,5 @@ if __name__ == '__main__':
         result_table_fields=args.field_name,
         sort_key=args.sort_key,
         print_cache_only=args.print_cache_only,
+        multiprocess_inference=(not args.force_single_process),
     ))
