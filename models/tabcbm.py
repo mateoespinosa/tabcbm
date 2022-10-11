@@ -33,6 +33,7 @@ class TabCBM(tf.keras.Model):
         latent_dims,
         n_concepts,
         mean_inputs,
+        features_to_embeddings_model=None,
         cov_mat=None,
         n_exclusive_concepts=0,
         n_supervised_concepts=0,
@@ -79,6 +80,7 @@ class TabCBM(tf.keras.Model):
         self.self_supervise_mode = self_supervised_mode
         self.concepts_to_labels_model = concepts_to_labels_model
         self.features_to_concepts_model = features_to_concepts_model
+        self.features_to_embeddings_model = features_to_embeddings_model
         self.eps = eps
         self.threshold = threshold
         self.n_concepts = n_concepts
@@ -326,6 +328,10 @@ class TabCBM(tf.keras.Model):
 
     def mask_features(self, x):
         masked_xs = []
+        if self.features_to_embeddings_model is not None:
+            # Then let's apply our embedding generator as we may have
+            # some variables which are categorical in nature
+            x = self.features_to_embeddings_model(x)
         for i in range(self.n_concepts):
             gate_vector = self._relaxed_multi_bernoulli_sample(
                 tf.nn.sigmoid(self.feature_probabilities[i, :]),
@@ -598,6 +604,10 @@ class TabCBM(tf.keras.Model):
         total_loss = 0.0
         avg_mask_rec_loss = 0.0
         avg_features_rec_loss = 0.0
+        if self.features_to_embeddings_model is not None:
+            # Then let's apply our embedding generator as we may have
+            # some variables which are categorical in nature
+            x = self.features_to_embeddings_model(x)
         for i in range(self.n_concepts):
             mask = self._multi_bernoulli_sample(
                 self.self_supervised_selection_prob[i, :],
@@ -812,6 +822,9 @@ class TabCBM(tf.keras.Model):
                     # Only train the decoder if requested by the user
                     training_decoder=self.end_to_end_training,
                 )
+                embedding_vars = []
+                if self.features_to_embeddings_model is not None:
+                    embedding_vars = self.features_to_embeddings_model.trainable_variables
                 trainable_vars = (
                     self.g_model.trainable_variables + 
                     [self.feature_probabilities] + (
@@ -820,7 +833,7 @@ class TabCBM(tf.keras.Model):
                     ) + (
                         self.features_to_concepts_model.trainable_variables
                         if self.end_to_end_training else []
-                    )
+                    ) + embedding_vars
                 )
                 for generator in self.concept_generators:
                     trainable_vars += generator.trainable_variables

@@ -28,6 +28,8 @@ def train_mlp(
     prefix="",
     trial_results=None,
     return_model=False,
+    cat_feat_inds=None,
+    cat_dims=None,
 ):
     utils.restart_seeds(seed)
     end_results =  trial_results if trial_results is not None else {}
@@ -46,6 +48,9 @@ def train_mlp(
             include_bn=experiment_config.get("include_bn", False),
             units=experiment_config["encoder_units"] + experiment_config.get('mlp_extra_units', []),
             latent_act=experiment_config.get("latent_act", None),
+            emb_dims=cat_feat_inds,
+            emb_in_size=cat_dims,
+            emb_out_size=experiment_config.get("emb_out_size", 1),
         ),
         decoder=models.construct_decoder(
             units=experiment_config["decoder_units"],

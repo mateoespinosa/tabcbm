@@ -34,6 +34,8 @@ def train_xgboost(
     ground_truth_concept_masks=None,
     trial_results=None,
     return_model=False,
+    cat_feat_inds=None,
+    cat_dims=None,
 ):
     utils.restart_seeds(seed)
     end_results = trial_results if trial_results is not None else {}
@@ -196,6 +198,8 @@ def train_lightgbm(
     ground_truth_concept_masks=None,
     trial_results=None,
     return_model=False,
+    cat_feat_inds=None,
+    cat_dims=None,
 ):
     utils.restart_seeds(seed)
     end_results = trial_results if trial_results is not None else {}

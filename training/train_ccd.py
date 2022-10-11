@@ -33,6 +33,8 @@ def train_ccd(
     prefix="",
     trial_results=None,
     return_model=False,
+    cat_feat_inds=None,
+    cat_dims=None,
 ):
     utils.restart_seeds(seed)
     channels_axis = (
@@ -67,6 +69,9 @@ def train_ccd(
             include_bn=experiment_config.get("include_bn", False),
             units=experiment_config["encoder_units"],
             latent_act=experiment_config.get("latent_act", None),
+            emb_dims=cat_feat_inds,
+            emb_in_size=cat_dims,
+            emb_out_size=experiment_config.get("emb_out_size", 1),
         ),
         decoder=models.construct_decoder(
             units=experiment_config["decoder_units"],
@@ -185,7 +190,7 @@ def train_ccd(
     # Now extract our concept vectors
     def derp(y_true, y_pred):
         return tf.keras.metrics.binary_accuracy(
-            y_true,
+            tf.cast(y_true, tf.int32),
             tf.cast(tf.math.sigmoid(y_pred) >= 0.5, tf.int32)
         )
     topic_model = CCD.TopicModel(

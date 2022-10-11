@@ -60,7 +60,7 @@ def generate_tabular_synth_data(
         y_train,
         c_train,
         test_size=test_percent,
-        random_state=42,
+        random_state=seed,
     )
     return (
         X_train,
@@ -318,7 +318,7 @@ def generate_synthetic_sc_dataset(
         y_train,
         c_train,
         test_size=test_percent,
-        random_state=42,
+        random_state=seed,
     )
     
     if dataset_dir is not None:
@@ -350,6 +350,55 @@ def generate_synthetic_sc_dataset(
         ground_truth_concept_masks,
         adata
     )
+
+###################################
+## FICO
+###################################
+
+def generate_fico_data(
+    test_percent=0.2,
+    seed=0,
+    data_path='data/fico/heloc_dataset_v1.csv',
+):
+    np.random.seed(seed)
+    data = pd.read_csv(data_path)
+    # Generate our encoded labels
+    data.loc[data["RiskPerformance"] == "Bad", "RiskPerformance"] = 0
+    data.loc[data["RiskPerformance"] == "Good", "RiskPerformance"] = 1
+    # Make the MaxDelqEver categorical feature be zero-indexed
+    data.loc[:, "MaxDelqEver"] = data.loc[:, "MaxDelqEver"] - 1
+    # Turn data into a numpy numeric array (all features are ints at this point)
+    data_matrix = data.to_numpy()
+    y = data_matrix[:, 0].astype(np.int32)
+    X = data_matrix[:, 1:]
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=test_percent,
+        random_state=seed,
+    )
+    return (
+        X_train,
+        X_test,
+        y_train,
+        y_test,
+    )
+
+def fico_cat_feats(
+    data_path='data/fico/heloc_dataset_v1.csv',
+):
+    data = pd.read_csv(data_path)
+    categorical_feats = ['MaxDelq2PublicRecLast12M', 'MaxDelqEver']
+    data_matrix = data.to_numpy()
+    X = data_matrix[:, 1:]
+    # And get all of our categotical features
+    cat_feats_inds = []
+    cat_dims = []
+    for feat_name in categorical_feats:
+        cat_feats_inds.append(list(data.columns[1:]).index(feat_name))
+        cat_dims.append(len(np.unique(X[:, cat_feats_inds[-1]])))
+    return cat_feats_inds, cat_dims
+
 
 
 ###################################

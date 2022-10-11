@@ -286,6 +286,7 @@ def main(
     ############################################################################
 
     ds_name = experiment_config['dataset'].lower().strip()
+    cat_features_fn = None
     if ds_name == "synth_tab_linear":
         data_generator = data.generate_tabular_synth_linear_data
     elif ds_name == "synth_tab_nonlinear":
@@ -300,6 +301,9 @@ def main(
         data_generator = data.generate_higgs_data
     elif ds_name == "pbmc":
         data_generator = data.generate_pbmc_data
+    elif ds_name == "fico":
+        data_generator = data.generate_fico_data
+        cat_features_fn = data.fico_cat_feats
     else:
         used = experiment_config['dataset']
         raise ValueError(f'Unrecognized dataset name "{used}"')
@@ -320,6 +324,7 @@ def main(
         sort_key=sort_key,
         print_cache_only=print_cache_only,
         multiprocess_inference=multiprocess_inference,
+        cat_features_fn=cat_features_fn,
     )
     return 0
 

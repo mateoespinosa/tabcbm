@@ -34,6 +34,8 @@ def train_tabcbm(
     prefix="",
     trial_results=None,
     return_model=False,
+    cat_feat_inds=None,
+    cat_dims=None,
 ):
     utils.restart_seeds(seed)
     end_results = trial_results if trial_results is not None else {}
@@ -42,17 +44,32 @@ def train_tabcbm(
     
     # Proceed to do and end-to-end model in case we want to
     # do some task-specific pretraining
+    return_embedding_extractor = (
+        (cat_feat_inds is not None) and
+        (cat_dims is not None)
+    )
+    encoder = models.construct_encoder(
+        input_shape=experiment_config["input_shape"],
+        latent_dims=experiment_config["latent_dims"],
+        include_bn=experiment_config.get("include_bn", False),
+        units=experiment_config["encoder_units"],
+        latent_act=experiment_config.get("latent_act", None),
+        emb_dims=cat_feat_inds,
+        emb_in_size=cat_dims,
+        emb_out_size=experiment_config.get("emb_out_size", 1),
+        return_embedding_extractor=return_embedding_extractor,
+    )
+    if return_embedding_extractor:
+        # Then unpack the encoder into its constituent pieces
+        encoder, features_to_embedding, embedding_to_code = encoder
+    else:
+        embedding_to_code = encoder
+        features_to_embedding = None
     end_to_end_model, encoder, decoder = models.construct_end_to_end_model(
         input_shape=experiment_config["input_shape"],
         num_outputs=experiment_config["num_outputs"],
         learning_rate=experiment_config["learning_rate"],
-        encoder=models.construct_encoder(
-            input_shape=experiment_config["input_shape"],
-            latent_dims=experiment_config["latent_dims"],
-            include_bn=experiment_config.get("include_bn", False),
-            units=experiment_config["encoder_units"],
-            latent_act=experiment_config.get("latent_act", None),
-        ),
+        encoder=encoder,
         decoder=models.construct_decoder(
             units=experiment_config["decoder_units"],
             num_outputs=experiment_config["num_outputs"],
@@ -68,6 +85,13 @@ def train_tabcbm(
         logging.debug(prefix + "Found encoder/decoder models serialized! We will unload them into the end-to-end model!")
         # Then time to load up the end-to-end model!
         encoder = tf.keras.models.load_model(encoder_path)
+        if return_embedding_extractor:
+            embedding_to_code = tf.keras.models.load_model(
+                encoder_path.replace('/pretrained_encoder', '/pretrained_emb_to_code')
+            )
+            features_to_embedding = tf.keras.models.load_model(
+                encoder_path.replace('/pretrained_encoder', '/pretrained_feats_to_emb')
+            )
         decoder = tf.keras.models.load_model(decoder_path)
         end_to_end_model, encoder, decoder = models.construct_end_to_end_model(
             input_shape=experiment_config["input_shape"],
@@ -124,6 +148,13 @@ def train_tabcbm(
             )
             pretrain_epochs_trained = len(pretrain_hist.history['loss'])
             encoder.save(encoder_path)
+            if return_embedding_extractor:
+                embedding_to_code.save(
+                    encoder_path.replace('/pretrained_encoder', '/pretrained_emb_to_code')
+                )
+                features_to_embedding.save(
+                    encoder_path.replace('/pretrained_encoder', '/pretrained_feats_to_emb')
+                )
             decoder.save(decoder_path)
             logging.debug(prefix + "\tModel pre-training completed")
     else:
@@ -177,7 +208,8 @@ def train_tabcbm(
     except:
         cov_mat = None
     tab_cbm_params = dict(
-        features_to_concepts_model=encoder,
+        features_to_concepts_model=embedding_to_code,
+        features_to_embeddings_model=features_to_embedding,
         concepts_to_labels_model=decoder,
         latent_dims=experiment_config["latent_dims"],
         n_concepts=experiment_config['n_concepts'],
@@ -694,6 +726,12 @@ def train_tabcbm(
     )
     end_results['num_unused_features'] = np.count_nonzero(
         np.sum(masks >= 0.5, axis=0) == 0
+    )
+    end_results['max_concept_size'] = np.max(
+        np.sum(masks >= 0.5, axis=-1)
+    )
+    end_results['min_concept_size'] = np.min(
+        np.sum(masks >= 0.5, axis=-1)
     )
     
     if (ground_truth_concept_masks is not None) and (c_train is not None) and (

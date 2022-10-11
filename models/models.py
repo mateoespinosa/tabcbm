@@ -7,7 +7,51 @@ import concepts_xai.methods.SENN.aggregators as aggregators
 import concepts_xai.methods.VAE.betaVAE as beta_vae
 import concepts_xai.methods.VAE.losses as vae_losses
 
+def replace_with_embedding(
+    input_tensor,
+    input_shape,
+    emb_dims,
+    emb_in_size,
+    emb_out_size=1,
+):
+    # Then time to add an embedding here!
+    inputs = []
+    special_dims = sorted(
+        list(zip(emb_dims, emb_in_size)),
+        key=lambda x: x[0],
+    )
+    current = 0
+    special_idx = 0
+    next_post = special_dims[0][0]
+    while current < input_shape[-1]:
+        if current == next_post:
+            emb_input = tf.cast(
+                input_tensor[:, current],
+                tf.int64,
+            )
+            inputs.append(
+                tf.keras.layers.Embedding(
+                    input_dim=special_dims[special_idx][1],
+                    output_dim=emb_out_size,
+                )(emb_input)
+            )
 
+            # And update all trackers
+            special_idx += 1
+            if special_idx < len(special_dims):
+                next_post = special_dims[special_idx][0]
+            else:
+                next_post = input_shape[-1]
+            current += 1
+        else:
+            inputs.append(
+                input_tensor[:, current:next_post],
+            )
+            current = next_post
+    return tf.concat(
+        inputs,
+        axis=-1,
+    )
 
 def construct_encoder(
     input_shape,
@@ -15,9 +59,28 @@ def construct_encoder(
     latent_dims,
     include_bn=False,
     latent_act=None,  # Original paper used "sigmoid" but this is troublesome in deep architectures
+    emb_dims=None,
+    emb_in_size=None,
+    emb_out_size=1,
+    return_embedding_extractor=False,
 ):
     encoder_inputs = tf.keras.Input(shape=input_shape)
     encoder_compute_graph = encoder_inputs
+    if (emb_dims is not None) and (emb_in_size is not None):
+        encoder_compute_graph = replace_with_embedding(
+            input_tensor=encoder_compute_graph,
+            input_shape=input_shape,
+            emb_dims=emb_dims,
+            emb_in_size=emb_in_size,
+            emb_out_size=emb_out_size,
+        )
+        if return_embedding_extractor:
+            emb_extractor = tf.keras.Model(
+                encoder_inputs,
+                encoder_compute_graph,
+                name="embedding_extractor",
+            )
+            after_emb_inputs = encoder_compute_graph
     if include_bn:
         encoder_compute_graph = tf.keras.layers.BatchNormalization(
             axis=-1,
@@ -50,11 +113,19 @@ def construct_encoder(
         name="encoder_bypass_channel",
     )(encoder_compute_graph)
     
-    return tf.keras.Model(
+    encoder = tf.keras.Model(
         encoder_inputs,
         encoder_compute_graph,
         name="encoder",
     )
+    if return_embedding_extractor:
+        emb_to_code = tf.keras.Model(
+            after_emb_inputs,
+            encoder_compute_graph,
+            name="emb_to_code",
+        )
+        return encoder, emb_extractor, emb_to_code
+    return encoder
 
 ############################################################################
 ## Build concepts-to-labels model
@@ -145,9 +216,20 @@ def construct_senn_encoder(
     end_activation="sigmoid",
     latent_dims=0,
     latent_act=None,  # Original paper used "sigmoid" but this is troublesome in deep architectures
+    emb_dims=None,
+    emb_in_size=None,
+    emb_out_size=1,
 ):
     encoder_inputs = tf.keras.Input(shape=input_shape)
     encoder_compute_graph = encoder_inputs
+    if (emb_dims is not None) and (emb_in_size is not None):
+        encoder_compute_graph = replace_with_embedding(
+            input_tensor=encoder_compute_graph,
+            input_shape=input_shape,
+            emb_dims=emb_dims,
+            emb_in_size=emb_in_size,
+            emb_out_size=emb_out_size,
+        )
     for i, units in enumerate(units):
         encoder_compute_graph = tf.keras.layers.Dense(
             units,

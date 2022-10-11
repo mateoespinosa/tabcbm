@@ -45,6 +45,8 @@ def train_senn(
     prefix="",
     trial_results=None,
     return_model=False,
+    cat_feat_inds=None,
+    cat_dims=None,
 ):
     utils.restart_seeds(seed)
     end_results = trial_results if trial_results is not None else {}
@@ -59,6 +61,9 @@ def train_senn(
         units=experiment_config["encoder_units"],
         latent_act=experiment_config.get("latent_act", None),
         latent_dims=experiment_config['n_concepts'],
+        emb_dims=cat_feat_inds,
+        emb_in_size=cat_dims,
+        emb_out_size=experiment_config.get("emb_out_size", 1),
     )
     concept_decoder = models.construct_vae_decoder(
         units=experiment_config["decoder_units"],

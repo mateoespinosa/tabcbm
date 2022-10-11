@@ -122,6 +122,7 @@ def experiment_loop(
     print_cache_only=False,
     result_table_fields=None,
     sort_key="model",
+    cat_features_fn=None,
 ):
     # Set log level in env variable as this will be necessary for
     # subprocessing
@@ -216,6 +217,7 @@ def experiment_loop(
                     f'Instead we got a tuple with {len(data)} elements in it.'
                 )
             logging.debug(f"\tDone!")
+
             
         logging.debug(f"\tx_train shape is {x_train.shape} and type is {x_train.dtype}")
         logging.debug(f"\tx_test shape is {x_test.shape} and type is {x_test.dtype}")
@@ -239,6 +241,16 @@ def experiment_loop(
             logging.info(
                 f"\tTest concept distribution: {np.mean(c_test, axis=0)}"
             )
+        
+        # See if there are any dimensions that we know are
+        # categorical
+        if cat_features_fn is not None:
+            cat_feat_inds, cat_dims = cat_features_fn(
+                **experiment_config.get('data_hyperparams', {})
+            )
+            logging.debug(f"\tcat_dims: {cat_feat_inds}")
+        else:
+            cat_feat_inds, cat_dims = None, None
         for current_config in experiment_config['runs']:
             if restart_gpu_on_run_trial:
                 device = cuda.get_current_device()
@@ -274,41 +286,69 @@ def experiment_loop(
                 # Find the model which we will be using
                 arch = run_config['model']
                 arch_name = arch.lower().strip()
+                cast_fn = lambda x: x
                 if arch_name == 'tabcbm':
                     train_fn = train_tabcbm
+                    cast_fn = lambda x: x.astype(np.float32)
                     extra_kwargs = dict(
                         cov_mat=cov_mat,
                         ground_truth_concept_masks=ground_truth_concept_masks,
+                        cat_feat_inds=cat_feat_inds,
+                        cat_dims=cat_dims,
                     )
                 elif arch_name == 'cbm':
                     train_fn = train_cbm
+                    cast_fn = lambda x: x.astype(np.float32)
                     extra_kwargs = {}
                 elif arch_name == "ccd":
                     train_fn = train_ccd
-                    extra_kwargs = {}
+                    cast_fn = lambda x: x.astype(np.float32)
+                    extra_kwargs = dict(
+                        cat_feat_inds=cat_feat_inds,
+                        cat_dims=cat_dims,
+                    )
                 elif arch_name == "xgboost":
                     train_fn = train_xgboost
                     extra_kwargs = dict(
                         ground_truth_concept_masks=ground_truth_concept_masks,
+                        cat_feat_inds=cat_feat_inds,
+                        cat_dims=cat_dims,
                     )
                 elif arch_name == "lightgbm":
                     train_fn = train_lightgbm
                     extra_kwargs = dict(
                         ground_truth_concept_masks=ground_truth_concept_masks,
+                        cat_feat_inds=cat_feat_inds,
+                        cat_dims=cat_dims,
                     )
                 elif arch_name == "tabnet":
                     train_fn = train_tabnet
+                    cast_fn = lambda x: x.astype(np.float32)
                     extra_kwargs = dict(
                         ground_truth_concept_masks=ground_truth_concept_masks,
+#                         cat_feat_inds=cat_feat_inds,
+#                         cat_dims=cat_dims,
                     )
                 elif arch_name == "mlp":
                     train_fn = train_mlp
-                    extra_kwargs = {}
+                    cast_fn = lambda x: x.astype(np.float32)
+                    extra_kwargs = dict(
+                        cat_feat_inds=cat_feat_inds,
+                        cat_dims=cat_dims,
+                    )
                 elif arch_name == "senn":
                     train_fn = train_senn
-                    extra_kwargs = {}
+                    cast_fn = lambda x: x.astype(np.float32)
+                    extra_kwargs = dict(
+#                         cat_feat_inds=cat_feat_inds,
+#                         cat_dims=cat_dims,
+                    )
                 else:
                     raise ValueError(f'Unsupported model architecture "{arch}"')
+                if x_train is not None:
+                    x_train = cast_fn(x_train)
+                if x_test is not None:
+                    x_test = cast_fn(x_test)
 
                 # Set up[ a local directory for this model to use for its results
                 run_config["results_dir"] = os.path.join(base_results_dir, arch)
