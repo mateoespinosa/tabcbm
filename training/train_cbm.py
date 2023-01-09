@@ -404,14 +404,9 @@ def train_cbm(
             train_concept_scores = tf.concat(train_concept_scores, axis=-1)
         train_concept_scores = train_concept_scores.numpy()
         logging.debug(prefix + f"\t\tComputing best independent concept aligment...")
-        end_results['best_independent_alignment'], end_results['best_ind_alignment_auc'] = utils.posible_load(
-            key=['best_independent_alignment', 'best_ind_alignment_auc'],
-            old_results=old_results,
-            load_from_cache=load_from_cache,
-            run_fn=lambda: metrics.find_best_independent_alignment(
-                scores=(train_concept_scores >= 0.5).astype(np.float32),
-                c_train=c_train,
-            ),
+        end_results['best_independent_alignment'], end_results['best_ind_alignment_auc'] = metrics.find_best_independent_alignment(
+            scores=train_concept_scores,
+            c_train=c_train,
         )
         
         representation_evaluation.evaluate_concept_representations(
@@ -428,75 +423,91 @@ def train_cbm(
         if experiment_config.get('perform_interventions', True):
             # Then time to do some interventions!
             logging.debug(prefix + f"\t\tPerforming concept interventions")
-            selected_concepts = end_results['best_ind_alignment_auc'] >= experiment_config.get(
+            threshs = experiment_config.get(
                 'usable_concept_threshold',
-                0.85,
+                [0.85],
             )
-            selected_concepts_idxs = np.array(
-                list(range(experiment_config['n_concepts']))
-            )[selected_concepts]
-            corresponding_real_concepts = np.array(
-                end_results['best_independent_alignment']
-            )[selected_concepts]
-            end_results['interveneable_concepts'] = utils.posible_load(
-                key='interveneable_concepts',
-                old_results=old_results,
-                load_from_cache=load_from_cache,
-                run_fn=lambda: np.sum(selected_concepts),
-            )
-            logging.debug(
-                prefix + f"\t\t\tNumber of concepts we will intervene on " +
-                f"is {end_results['interveneable_concepts']}/{experiment_config['n_concepts']}"
-            )
-            one_hot_labels = tf.keras.utils.to_categorical(y_test)
-            for num_intervened_concepts in range(1, end_results['interveneable_concepts'] + 1):
-                def _run():
-                    avg = 0.0
-                    for i in range(experiment_config.get('intervention_trials', 5)):
-                        current_sel = np.random.permutation(
-                            list(range(len(selected_concepts_idxs)))
-                        )[:num_intervened_concepts]
-                        fixed_used_concept_idxs = selected_concepts_idxs[current_sel]
-                        real_corr_concept_idx = corresponding_real_concepts[current_sel]
-                        new_test_bottleneck = test_concept_scores[:, :]
-                        # We need to figure out the "direction" of the intervention:
-                        #     There is not reason why a learnt concept aligned such that its
-                        #     corresponding ground truth concept is high when the learnt concept
-                        #     is high. Because they are binary, it could perfectly be the case
-                        #     that the alignment happend with the complement.
-                        for learnt_concept_idx, real_concept_idx in zip(
-                            fixed_used_concept_idxs,
-                            real_corr_concept_idx,
-                        ):
-                            pos_score = 1
-                            neg_score = 0
-                            new_test_bottleneck[:, learnt_concept_idx] = \
-                                c_test[:, real_concept_idx] * pos_score + (
-                                    (1 - c_test[:, real_concept_idx]) * neg_score
-                                )
-                        avg += sklearn.metrics.accuracy_score(
-                            y_test,
-                            np.argmax(
-                                scipy.special.softmax(
-                                    cbm.predict_from_concepts(new_test_bottleneck),
-                                    axis=-1,
-                                ),
-                                axis=-1
-                            ),
-                        )
-                    return avg / experiment_config.get('intervention_trials', 5)
+            if not isinstance(threshs, list):
+                threshs = [threshs]
+            for thresh in threshs:
+                selected_concepts = end_results['best_ind_alignment_auc'] >= thresh
+                corresponding_real_concepts = np.array(
+                    end_results['best_independent_alignment']
+                )
+                if (
+                    (experiment_config.get("n_supervised_concepts", 0) != 0) and
+                    (len(experiment_config.get('supervised_concept_idxs', [])) > 0)
+                ):
+                    # Then compute the mean concept predictive accuracy
+                    for learnt_idx, real_idx in enumerate(
+                        experiment_config['supervised_concept_idxs']
+                    ):
+                        selected_concepts[learnt_idx] = True
+                        corresponding_real_concepts[learnt_idx] = real_idx
 
-                end_results[f'acc_intervention_{num_intervened_concepts}'] = utils.posible_load(
-                    key=f'acc_intervention_{num_intervened_concepts}',
-                    old_results=old_results,
-                    load_from_cache=load_from_cache,
-                    run_fn=_run,
-                )
+                selected_concepts_idxs = np.array(
+                    list(range(experiment_config['n_concepts']))
+                )[selected_concepts]        
+                corresponding_real_concepts = corresponding_real_concepts[selected_concepts]
+
+                end_results[f'interveneable_concepts_{thresh}'] = np.sum(selected_concepts)
+                interveneable_concepts = end_results[f'interveneable_concepts_{thresh}']
                 logging.debug(
-                    prefix +
-                    f"\t\t\tIntervention accuracy with {num_intervened_concepts} "
-                    f"concepts: {end_results[f'acc_intervention_{num_intervened_concepts}'] * 100:.2f}%"
+                    prefix + f"\t\t\tNumber of concepts we will intervene on " +
+                    f"is {interveneable_concepts}/{experiment_config['n_concepts']}"
                 )
+                one_hot_labels = tf.keras.utils.to_categorical(y_test)
+                for num_intervened_concepts in range(1, interveneable_concepts + 1):
+                    def _run():
+                        avg = 0.0
+                        for i in range(experiment_config.get('intervention_trials', 5)):
+                            current_sel = np.random.permutation(
+                                list(range(len(selected_concepts_idxs)))
+                            )[:num_intervened_concepts]
+                            fixed_used_concept_idxs = selected_concepts_idxs[current_sel]
+                            real_corr_concept_idx = corresponding_real_concepts[current_sel]
+                            new_test_bottleneck = test_concept_scores[:, :]
+                            # We need to figure out the "direction" of the intervention:
+                            #     There is not reason why a learnt concept aligned such that its
+                            #     corresponding ground truth concept is high when the learnt concept
+                            #     is high. Because they are binary, it could perfectly be the case
+                            #     that the alignment happend with the complement.
+                            for learnt_concept_idx, real_concept_idx in zip(
+                                fixed_used_concept_idxs,
+                                real_corr_concept_idx,
+                            ):
+                                pos_score = 1
+                                neg_score = 0
+                                new_test_bottleneck[:, learnt_concept_idx] = \
+                                    c_test[:, real_concept_idx] * pos_score + (
+                                        (1 - c_test[:, real_concept_idx]) * neg_score
+                                    )
+                            avg += sklearn.metrics.accuracy_score(
+                                y_test,
+                                np.argmax(
+                                    scipy.special.softmax(
+                                        cbm.predict_from_concepts(new_test_bottleneck),
+                                        axis=-1,
+                                    ),
+                                    axis=-1
+                                ),
+                            )
+                        return avg / experiment_config.get('intervention_trials', 5)
+
+                    key = f'acc_intervention_{num_intervened_concepts}_thresh_{thresh}'
+                    end_results[key] = utils.posible_load(
+                        key=key,
+                        old_results=old_results,
+                        load_from_cache=load_from_cache,
+                        run_fn=_run,
+                    )
+                    logging.debug(
+                        prefix +
+                        f"\t\t\tIntervention accuracy with {num_intervened_concepts} "
+                        f"concepts (thresh = {thresh} with {interveneable_concepts} interveneable concepts): {end_results[key] * 100:.2f}%"
+                    )
+                    if thresh == threshs[-1]:
+                         end_results[f'acc_intervention_{num_intervened_concepts}'] = end_results[key]
         
     if return_model:
         return end_results, cbm

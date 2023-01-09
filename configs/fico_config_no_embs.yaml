@@ -1,0 +1,201 @@
+trials: 3
+results_dir: "results/fico_no_embs"
+dataset: "fico"
+use_cat_embs: False
+shared_params:
+    # Experiment setup
+    verbosity: 1
+    aggr_key: "{model}"
+    extra_name: ''
+    continuous_concepts: True
+
+    # Model configuration
+    encoder_units: [32, 32, 32] #[128, 64, 32]
+    decoder_units: [16]
+    latent_dims: 16
+
+    # Misc Hyperparameters
+    seed: 42
+    eps: 1.0E-5
+
+    # Training variables
+    batch_size: 2048
+    virtual_batch_size: 1024
+    max_epochs: 3000
+    learning_rate: 1.0E-3
+    patience: 500
+    min_delta: 1.0E-5
+    holdout_fraction: 0.1
+    early_stop_metric: "val_accuracy" #"val_loss"
+    early_stop_mode: "max" #"min"
+
+    # Metrics variables
+    cas_step: 10
+    usable_concept_threshold: 0.85
+
+runs:
+#     - model: 'MLP'
+#       latent_act: 'relu'
+#       include_bn: True
+#       encoder_units: [[32, 32, 32], [256, 128, 64, 64]]
+#       decoder_units: [16]
+#       latent_dims: [16, 64]
+#       aggr_key: ["{model}", "{model} (large)"]
+#       extra_name: ["", "large"]
+#       grid_variables:
+#           - encoder_units
+#           - latent_dims
+#           - extra_name
+#           - aggr_key
+#       grid_search_mode: paired
+
+#     - model: 'XGBoost'
+#       extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
+#       aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
+#       nthread: 6
+#       learning_rate: 1.0E-2
+#       max_depth: [5, 10]
+#       grid_variables:
+#           - max_depth
+#       grid_search_mode: exhaustive
+  
+#     - model: 'LightGBM'
+#       extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
+#       aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
+#       nthread: 6
+#       learning_rate: 1.0E-2
+#       max_depth: [5, 10]
+#       num_leaves: [32, 1024]
+#       verbosity: -1
+#       grid_variables:
+#           - max_depth
+#           - num_leaves
+#       grid_search_mode: paired
+      
+    - model: 'TabCBM'
+      pretrain_epochs: 50
+      self_supervised_train_epochs: 50
+      use_concept_embedding: False
+      end_to_end_training: True
+      coherence_reg_weight: 1 #0.1
+      diversity_reg_weight: "{{weight_used_1}}"
+      feature_selection_reg_weight: "{{weight_used_2}}"
+      contrastive_reg_weight: 0
+      prob_diversity_reg_weight: 0
+      gate_estimator_weight: 10
+      n_exclusive_concepts: 0
+      zero_mask: True
+      normalized_scores: True
+      temperature: 1
+      top_k: 512 #1024
+      n_concepts: [10, 8, 6]
+      aggr_key: "{model} (smaller k={n_concepts}, latent={latent_dims}, w1={weight_used_1}, w2={weight_used_2})"
+      extra_name: "smaller_k_{n_concepts}_latent_{latent_dims}_weight1_{weight_used_1}_weight2_{weight_used_2}"
+      latent_dims: 64
+      force_generator_inclusion: True
+      weight_used_1: [1] #0.1] #, 10, 1, 0.1, 0.01]
+      weight_used_2: [0.0, 0.25, 0.5, 0.75, 1] #0.1] #, 1, 0.1, 0.01]
+      include_bn: True
+      lr_schedule_decay: True
+      concept_generator_units: [32] #[16]
+      rec_model_units: [32] #[16]
+      grid_variables:
+          - n_concepts
+          - weight_used_1
+          - weight_used_2
+      grid_search_mode: exhaustive
+  
+#     - model: 'TabCBM'
+#       pretrain_epochs: 50
+#       self_supervised_train_epochs: 50
+#       use_concept_embedding: False
+#       end_to_end_training: True
+#       coherence_reg_weight: 0.1
+#       diversity_reg_weight: "{{weight_used_1}}"
+#       feature_selection_reg_weight: "{{weight_used_2}}"
+#       contrastive_reg_weight: 0
+#       prob_diversity_reg_weight: 0
+#       gate_estimator_weight: 10
+#       n_exclusive_concepts: 0
+#       zero_mask: True
+#       normalized_scores: True
+#       temperature: 1
+#       top_k: 512
+#       n_concepts: [8, 6, 4]
+#       aggr_key: "{model} (large k={n_concepts}, latent={latent_dims}, w1={weight_used_1}, w2={weight_used_2})"
+#       extra_name: "large_k_{n_concepts}_latent_{latent_dims}_weight1_{weight_used_1}_weight2_{weight_used_2}"
+#       force_generator_inclusion: True
+#       weight_used_1: [10, 1, 0.1, 0.01]
+#       weight_used_2: [10, 1, 0.1, 0.01]
+#       include_bn: True
+#       lr_schedule_decay: True
+#       latent_dims: 64
+#       encoder_units: [256, 128, 64, 64]
+#       decoder_units: [16]
+#       concept_generator_units: [32]
+#       rec_model_units: [32]
+#       grid_variables:
+#           - n_concepts
+#           - weight_used_1
+#           - weight_used_2
+#       grid_search_mode: exhaustive
+  
+#     - model: 'TabNet'
+#       pretrain_epochs: [100, 100]
+#       n_d: [96, 32]
+#       n_a: 32
+#       n_steps: [8, 5]
+#       gamma: 2.0
+#       momentum: 0.9
+#       lambda_sparse: 0.000001
+#       initial_lr: 0.025
+#       decay_rate: 0.9
+#       decay_step_size: 10
+#       pretraining_ratio: 0.8
+#       eps: 1.0E-15
+#       aggr_key: ["{model} large", "{model} small"]
+#       extra_name: ['large', '']
+#       grid_variables:
+#           - n_d
+#           - n_steps
+#           - pretrain_epochs
+#           - aggr_key
+#           - extra_name
+#       grid_search_mode: paired
+
+    
+#     - model: 'SENN'
+#       pretrain_autoencoder_epochs: 0 #100 Having trouble with pretraining instabilities here
+#       regularization_strength: [0.01, 0.1]
+#       sparsity_strength: [2.0E-5, 2.0E-3]
+#       coefficient_model_units: [300, 300]
+#       n_concepts: [8, 6, 4]
+#       aggr_key: "{model} (k={n_concepts}, pre_train={pretrain_autoencoder_epochs}, reg={regularization_strength}, sparsity={sparsity_strength})"
+#       extra_name: "k_{n_concepts}_pre_train_{pretrain_autoencoder_epochs}_reg_{regularization_strength}_sparsity_{sparsity_strength}"
+#       grid_variables:
+#           - n_concepts
+#           - regularization_strength
+#           - sparsity_strength
+#       grid_search_mode: exhaustive
+#       early_stop_metric: "val_sparse_top_k_categorical_accuracy"
+      
+#     - model: 'CCD'
+#       pretrain_epochs: 100
+#       include_bn: True
+#       latent_dims: 64
+#       n_concepts: [8, 6, 4]
+#       aggr_key: "{model} (k={n_concepts}, lambda1={lambda1}, lambda2={lambda2})"
+#       extra_name: "k_{n_concepts}_lambda1_{lambda1}__lambda2_{lambda2}"
+#       lambda1: [0.1, 1]
+#       lambda2: [0.1, 1]
+#       top_k: 2048
+#       threshold: 0.0
+#       grid_variables:
+#           - n_concepts
+#           - lambda1
+#           - lambda2
+#       grid_search_mode: exhaustive
+  
+
+
+

@@ -1,5 +1,5 @@
 trials: 5
-results_dir: "results/sc_synth/sc_10_cell_types"
+results_dir: "/homes/me466/tmp_tabcbm_results/sc_synth/sc_10_cell_types"
 dataset: "synth_sc_data"
 shared_params:
     # Experiment setup
@@ -18,9 +18,9 @@ shared_params:
 
     # Training variables
     batch_size: 1024
-    max_epochs: 1500
+    patience: 500
+    max_epochs: 3000
     learning_rate: 1.0E-3
-    patience: 50
     min_delta: 1.0E-5
     holdout_fraction: 0.1
     early_stop_metric: "val_loss"
@@ -28,82 +28,33 @@ shared_params:
 
     # Metrics variables
     cas_step: 10
-    usable_concept_threshold: 0.85
+    usable_concept_threshold: [0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.60, 0.65, 0.7, 0.75,0.8, 0.85]
 
 runs:
-    - model: 'CBM'
-      pretrain_epochs: 100
+    - model: 'TabTransformer'
+      mlp_hidden_mults: [64, 32] # [128, 64, 64, 32]
+      
+    - model: 'CEM'
       include_bn: True
-      pass_concept_logits: False
-      concept_loss_weight: [0.1, 5]
+      encoder_units: [128, 64, 64]
+      n_latent_acts: 32
+      emb_size: 8
+      concept_loss_weight: [5]
       n_supervised_concepts: [1, 3, 5, 7, 9, 11]
-      concept_supervision_annotated_fraction: [0.25, 1]
-      n_concepts: "{{n_ground_truth_concepts}}"
+      concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
+      n_concepts: "{{n_supervised_concepts}}"
       aggr_key: "{model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction}, c_weight={concept_loss_weight})"
       extra_name: "k_{n_concepts}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}_c_weight_{concept_loss_weight}"
-      patience: 250
+      patience: 500
+      learning_rate: 0.01
+      weight_decay: 4.0E-5
+      max_epochs: 3000
       grid_variables:
           - n_supervised_concepts
           - concept_supervision_annotated_fraction
           - concept_loss_weight
       grid_search_mode: exhaustive
       
-    - model: 'TabNet'
-      pretrain_epochs: 100
-      n_d: [8, 64]
-      n_a: [8, 64]
-      n_steps: [3, 5]
-      gamma: [1.3, 1.5]
-      momentum: 0.02
-      lambda_sparse: 1.0E-3
-      initial_lr: 0.02
-      decay_rate: 0.9
-      virtual_batch_size: 128
-      decay_step_size: 10
-      pretraining_ratio: 0.8
-      eps: 1.0E-15
-      extra_name: ['', 'large']
-      aggr_key: ["{model}", "{model} Large"]
-      grid_variables:
-          - n_d
-          - n_a
-          - n_steps
-          - gamma
-          - extra_name
-          - aggr_key
-      grid_search_mode: paired
-
-    - model: 'TabCBM'
-      pretrain_epochs: 50
-      self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
-
-      coherence_reg_weight: 1
-      diversity_reg_weight: 10
-      feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
-      gate_estimator_weight: 10
-
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
-      top_k: 102
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction})"
-      extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}"
-      patience: 750
-      max_epochs: 3000
-      concept_supervision_annotated_fraction: [0.25, 1]
-      n_supervised_concepts: [1, 3, 5, 7, 9, 11]
-      concept_prediction_weight: 1
-      grid_variables:
-          - concept_supervision_annotated_fraction
-          - n_supervised_concepts
-      grid_search_mode: exhaustive
-
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
@@ -130,6 +81,65 @@ runs:
       include_bn: [False, True]
       grid_variables:
           - include_bn
+      grid_search_mode: exhaustive
+    
+    - model: 'TabCBM'
+      pretrain_epochs: 50
+      self_supervised_train_epochs: 50
+      use_concept_embedding: False
+      end_to_end_training: True
+
+      coherence_reg_weight: 1
+      diversity_reg_weight: 10
+      feature_selection_reg_weight: 10
+      contrastive_reg_weight: 0
+      prob_diversity_reg_weight: 0
+      gate_estimator_weight: 10
+
+      n_exclusive_concepts: 0
+      zero_mask: True
+      normalized_scores: True
+      temperature: 1
+      top_k: 102
+      n_concepts: [6, 11]
+      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, bn={include_bn})"
+      extra_name: "k_{n_concepts}_bn_{include_bn}_partience_{patience}_epochs_{max_epochs}"
+      patience: 750
+      max_epochs: 3000
+      include_bn: True
+      grid_variables:
+          - n_concepts
+      grid_search_mode: exhaustive
+
+    - model: 'TabCBM'
+      pretrain_epochs: 50
+      self_supervised_train_epochs: 50
+      use_concept_embedding: False
+      end_to_end_training: True
+
+      coherence_reg_weight: 1
+      diversity_reg_weight: 10
+      feature_selection_reg_weight: 10
+      contrastive_reg_weight: 0
+      prob_diversity_reg_weight: 0
+      gate_estimator_weight: 10
+
+      n_exclusive_concepts: 0
+      zero_mask: True
+      normalized_scores: True
+      temperature: 1
+      top_k: 102
+      n_concepts: [17]
+      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, bn={include_bn})"
+      extra_name: "k_{n_concepts}_bn_{include_bn}_partience_{patience}_epochs_{max_epochs}"
+      patience: 750
+      max_epochs: 3000
+      include_bn: True
+      concept_generator_units: [16]
+      rec_model_units: [16]
+      latent_dims: 16
+      grid_variables:
+          - n_concepts
       grid_search_mode: exhaustive
 
     - model: 'TabCBM'
@@ -207,6 +217,100 @@ runs:
       extra_name: "no_pretrain_k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_weights_{coherence_reg_weight}_{diversity_reg_weight}_{feature_selection_reg_weight}"
       patience: 750
       max_epochs: 3000
+      
+    - model: 'TabCBM'
+      pretrain_epochs: 50
+      self_supervised_train_epochs: 50
+      use_concept_embedding: False
+      end_to_end_training: True
+
+      coherence_reg_weight: 1
+      diversity_reg_weight: 10
+      feature_selection_reg_weight: 10
+      contrastive_reg_weight: 0
+      prob_diversity_reg_weight: 0
+      gate_estimator_weight: 10
+
+      n_exclusive_concepts: 0
+      zero_mask: True
+      normalized_scores: True
+      temperature: 1
+      top_k: 102
+      n_concepts: "{{n_ground_truth_concepts}}"
+      aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction})"
+      extra_name: "k_{n_concepts}_partience_{patience}_epochs_{max_epochs}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}"
+      patience: 750
+      max_epochs: 3000
+      concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
+      n_supervised_concepts: [1, 3, 5, 7, 9, 11]
+      concept_prediction_weight: 5 #1
+      grid_variables:
+          - concept_supervision_annotated_fraction
+          - n_supervised_concepts
+      grid_search_mode: exhaustive
+
+    - model: 'PCA'
+      n_concepts: "{{n_ground_truth_concepts}}"
+
+    - model: 'CBM'
+      pretrain_epochs: 100
+      include_bn: True
+      pass_concept_logits: False
+      concept_loss_weight: [5] #0.1, 5]
+      n_supervised_concepts: [1, 3, 5, 7, 9, 11]
+      concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
+      n_concepts: "{{n_ground_truth_concepts}}"
+      aggr_key: "{model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction}, c_weight={concept_loss_weight})"
+      extra_name: "k_{n_concepts}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}_c_weight_{concept_loss_weight}"
+      patience: 250
+      grid_variables:
+          - n_supervised_concepts
+          - concept_supervision_annotated_fraction
+          - concept_loss_weight
+      grid_search_mode: exhaustive
+    
+    - model: 'CBM'
+      pretrain_epochs: 100
+      include_bn: True
+      pass_concept_logits: False
+      concept_loss_weight: [5] #0.1, 5]
+      n_supervised_concepts: [1, 3, 5, 7, 9, 11]
+      concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
+      n_concepts: "{{n_supervised_concepts}}"
+      aggr_key: "vanilla {model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction}, c_weight={concept_loss_weight})"
+      extra_name: "vanilla_k_{n_concepts}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}_c_weight_{concept_loss_weight}"
+      patience: 250
+      grid_variables:
+          - n_supervised_concepts
+          - concept_supervision_annotated_fraction
+          - concept_loss_weight
+      grid_search_mode: exhaustive
+      
+    - model: 'TabNet'
+      pretrain_epochs: 100
+      n_d: [8, 64]
+      n_a: [8, 64]
+      n_steps: [3, 5]
+      gamma: [1.3, 1.5]
+      momentum: 0.02
+      lambda_sparse: 1.0E-3
+      initial_lr: 0.02
+      decay_rate: 0.9
+      virtual_batch_size: 128
+      decay_step_size: 10
+      pretraining_ratio: 0.8
+      eps: 1.0E-15
+      extra_name: ['', 'large']
+      aggr_key: ["{model}", "{model} Large"]
+      grid_variables:
+          - n_d
+          - n_a
+          - n_steps
+          - gamma
+          - extra_name
+          - aggr_key
+      grid_search_mode: paired
+
 
     - model: 'MLP'
       encoder_units: [[128, 64], [64, 64, 64]]
@@ -228,6 +332,7 @@ runs:
       nthread: 6
       learning_rate: 1.0E-2
       max_depth: [5, 10]
+      max_epochs: 1500
       grid_variables:
           - max_depth
       grid_search_mode: paired
@@ -239,6 +344,7 @@ runs:
       learning_rate: 0.01
       max_depth: [5, 10]
       num_leaves: [32, 1024]
+      max_epochs: 1500
       verbosity: -1
       grid_variables:
           - max_depth

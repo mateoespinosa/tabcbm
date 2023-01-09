@@ -680,6 +680,7 @@ def generate_synth_sc_data(
     min_cells=50,
     act_prog_size=250,
     act_prog_cell_types=None,
+    plot=False,
 ):
     prev = os.environ.get("CUDA_VISIBLE_DEVICES", None)
     # Ignote GPU to avoid flooding it with data
@@ -694,7 +695,7 @@ def generate_synth_sc_data(
         n_pcs=n_pcs,
         n_neighbors=n_neighbors,
         test_percent=test_percent,
-        plot=False,
+        plot=plot,
         min_cells=min_cells,
         min_genes=min_genes,
         min_counts=min_counts,

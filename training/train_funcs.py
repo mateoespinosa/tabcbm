@@ -20,6 +20,9 @@ from training.train_senn import train_senn
 from training.train_tabcbm import train_tabcbm
 from training.train_cbm import train_cbm
 from training.train_tabnet import train_tabnet
+from training.train_pca import train_pca
+from training.train_cem import train_cem
+from training.train_tabtransformer import train_tabtransformer
 import training.utils as utils
 
 ############################################
@@ -138,6 +141,8 @@ def experiment_loop(
         "Method",
         "Accuracy",
         "CAS",
+        "Corr-Aligned Concept Mask AUC",
+        "Corr-Aligned Concept AUC",
         "Best Mean Concept Mask AUC",
         "Best Mean Concept AUC",
         "Feature Importance Diff",
@@ -146,6 +151,8 @@ def experiment_loop(
     result_table_fields_keys = [
         "acc",
         "cas",
+        "corr_aligned_mean_mask_auc",
+        "corr_aligned_concept_auc",
         "best_mean_mask_auc",
         "best_concept_auc",
         "feat_importance_diff",
@@ -300,6 +307,10 @@ def experiment_loop(
                     train_fn = train_cbm
                     cast_fn = lambda x: x.astype(np.float32)
                     extra_kwargs = {}
+                elif arch_name == 'cem':
+                    train_fn = train_cem
+                    cast_fn = lambda x: x.astype(np.float32)
+                    extra_kwargs = {}
                 elif arch_name == "ccd":
                     train_fn = train_ccd
                     cast_fn = lambda x: x.astype(np.float32)
@@ -321,6 +332,9 @@ def experiment_loop(
                         cat_feat_inds=cat_feat_inds,
                         cat_dims=cat_dims,
                     )
+                elif arch_name == "pca":
+                    train_fn = train_pca
+                    extra_kwargs = dict()
                 elif arch_name == "tabnet":
                     train_fn = train_tabnet
                     cast_fn = lambda x: x.astype(np.float32)
@@ -328,6 +342,14 @@ def experiment_loop(
                         ground_truth_concept_masks=ground_truth_concept_masks,
 #                         cat_feat_inds=cat_feat_inds,
 #                         cat_dims=cat_dims,
+                    )
+                elif arch_name == "tabtransformer":
+                    train_fn = train_tabtransformer
+                    cast_fn = lambda x: x.astype(np.float32)
+                    extra_kwargs = dict(
+                        ground_truth_concept_masks=ground_truth_concept_masks,
+                        cat_feat_inds=cat_feat_inds,
+                        cat_dims=cat_dims,
                     )
                 elif arch_name == "mlp":
                     train_fn = train_mlp
@@ -354,11 +376,7 @@ def experiment_loop(
                 run_config["results_dir"] = os.path.join(base_results_dir, arch)
                 initialize_result_directory(run_config["results_dir"])
 
-                # Serialize the configuration we will be using for these experiments
-                joblib.dump(
-                    run_config,
-                    os.path.join(run_config['results_dir'], "config.joblib"),
-                )
+                
                 # Now time to actually train things and see what comes out
                 # of this
                 extra_name = run_config.get('extra_name', "").format(**run_config)
@@ -369,6 +387,12 @@ def experiment_loop(
                     f"for {arch}{extra_name}:"
                 )
                 utils.print_gpu_usage()
+                
+                # Serialize the configuration we will be using for these experiments
+                joblib.dump(
+                    run_config,
+                    os.path.join(run_config['results_dir'], f"config{extra_name + f'_trial_{trial}'}.joblib"),
+                )
 
                 local_results_path = os.path.join(
                     run_config["results_dir"],
@@ -383,9 +407,12 @@ def experiment_loop(
                         f"We will provide supervision "
                         f"for {run_config.get('n_supervised_concepts')} concepts"
                     )
-                    if load_from_cache and ('supervised_concept_idxs' in (old_results or {})):
+                    if (load_from_cache and (not run_config.get('force_rerun', False))) and (
+                        'supervised_concept_idxs' in (old_results or {})
+                    ):
                         supervised_concept_idxs = old_results['supervised_concept_idxs']
                     else:
+                        np.random.seed(trial + run_config.get('seed', 0))
                         concept_idxs = np.random.permutation(
                             list(range(run_config['n_ground_truth_concepts']))
                         )
@@ -393,7 +420,7 @@ def experiment_loop(
                     run_config['supervised_concept_idxs'] = concept_idxs
                     logging.debug(f"\tSupervising on concepts {concept_idxs}")
 
-                if print_cache_only and load_from_cache and (
+                if print_cache_only and (load_from_cache and (not run_config.get('force_rerun', False))) and (
                     old_results is not None
                 ):
                     trial_results = old_results
@@ -406,7 +433,7 @@ def experiment_loop(
                         x_test=x_test,
                         y_test=y_test,
                         c_test=c_test,
-                        load_from_cache=load_from_cache,
+                        load_from_cache=load_from_cache and (not run_config.get('force_rerun', False)),
                         prefix="\t\t\t",
                         seed=(trial + run_config.get('seed', 0)),
                         extra_name=(extra_name + f"_trial_{trial}"),
@@ -436,7 +463,7 @@ def experiment_loop(
                             x_test=x_test,
                             y_test=y_test,
                             c_test=c_test,
-                            load_from_cache=load_from_cache,
+                            load_from_cache=load_from_cache and (not run_config.get('force_rerun', False)),
                             prefix="\t\t\t",
                             seed=(trial + run_config.get('seed', 0)),
                             extra_name=(extra_name + f"_trial_{trial}"),

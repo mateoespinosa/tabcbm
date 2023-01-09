@@ -303,7 +303,8 @@ def main(
         data_generator = data.generate_pbmc_data
     elif ds_name == "fico":
         data_generator = data.generate_fico_data
-        cat_features_fn = data.fico_cat_feats
+        if experiment_config.get('use_cat_embs', True):
+            cat_features_fn = data.fico_cat_feats
     else:
         used = experiment_config['dataset']
         raise ValueError(f'Unrecognized dataset name "{used}"')

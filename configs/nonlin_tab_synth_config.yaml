@@ -1,5 +1,5 @@
 trials: 5
-results_dir: "results/tabular_synth/nonlin_synth"
+results_dir: "/homes/me466/tmp_tabcbm_results/tabular_synth/nonlin_synth"
 dataset: "synth_tab_nonlinear"
 shared_params:
     # Experiment setup
@@ -28,16 +28,42 @@ shared_params:
 
     # Metrics variables
     cas_step: 10
-    usable_concept_threshold: 0.85
+    usable_concept_threshold: [0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.60, 0.65, 0.7, 0.75,0.8, 0.85]
 
 runs:
+    - model: 'PCA'
+      n_concepts: "{{n_ground_truth_concepts}}"
+    
+    - model: 'TabTransformer'
+      mlp_hidden_mults: [16, 16, 16]
+      patience: 250
+    
+    - model: 'CEM'
+      include_bn: True
+      encoder_units: [16, 16]
+      n_latent_acts: 16
+      emb_size: 8
+      concept_loss_weight: [5]
+      n_supervised_concepts: [1, 2]
+      concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
+      n_concepts: "{{n_supervised_concepts}}"
+      aggr_key: "{model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction}, c_weight={concept_loss_weight})"
+      extra_name: "k_{n_concepts}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}_c_weight_{concept_loss_weight}"
+      patience: 250
+      grid_variables:
+          - n_supervised_concepts
+          - concept_supervision_annotated_fraction
+          - concept_loss_weight
+      grid_search_mode: exhaustive
+    
+
     - model: 'CBM'
       pretrain_epochs: 100
       include_bn: True
       pass_concept_logits: False
-      concept_loss_weight: [0.1, 5]
+      concept_loss_weight: [5] #[0.1, 1, 5]
       n_supervised_concepts: [1, 2]
-      concept_supervision_annotated_fraction: [0.25, 1]
+      concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
       n_concepts: "{{n_ground_truth_concepts}}"
       aggr_key: "{model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction}, c_weight={concept_loss_weight})"
       extra_name: "k_{n_concepts}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}_c_weight_{concept_loss_weight}"
@@ -47,8 +73,52 @@ runs:
           - concept_supervision_annotated_fraction
           - concept_loss_weight
       grid_search_mode: exhaustive
+    
+    - model: 'CBM'
+      pretrain_epochs: 100
+      include_bn: True
+      pass_concept_logits: False
+      concept_loss_weight: [5] #[0.1, 1, 5]
+      n_supervised_concepts: [1, 2]
+      concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
+      n_concepts: "{{n_supervised_concepts}}"
+      aggr_key: "vanilla {model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction}, c_weight={concept_loss_weight})"
+      extra_name: "vanilla_k_{n_concepts}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}_c_weight_{concept_loss_weight}"
+      patience: 250
+      grid_variables:
+          - n_supervised_concepts
+          - concept_supervision_annotated_fraction
+          - concept_loss_weight
+      grid_search_mode: exhaustive
    
-
+    - model: 'TabCBM'
+      pretrain_epochs: 50
+      self_supervised_train_epochs: 50
+      use_concept_embedding: False
+      end_to_end_training: True
+      coherence_reg_weight: 0.1
+      diversity_reg_weight: 5
+      feature_selection_reg_weight: 5
+      contrastive_reg_weight: 0
+      prob_diversity_reg_weight: 0
+      gate_estimator_weight: 10
+      n_exclusive_concepts: 0
+      zero_mask: True
+      normalized_scores: True
+      temperature: 1
+      top_k: 256
+      n_concepts: [1, 2, 4]
+      aggr_key: "{model} (k={n_concepts})"
+      extra_name: "k_{n_concepts}"
+      early_stop_metric: "val_accuracy"
+      early_stop_mode: "max"
+      early_stop_metric_pretrain: "val_loss"
+      early_stop_mode_pretrain: "min"
+      patience: .inf
+      grid_variables:
+          - n_concepts
+      grid_search_mode: exhaustive
+      
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
@@ -74,40 +144,6 @@ runs:
       early_stop_mode_pretrain: "min"
       patience: .inf
      
-     
-     
-    - model: 'TabCBM'
-      pretrain_epochs: 50
-      self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
-      coherence_reg_weight: 0.1
-      diversity_reg_weight: 5
-      feature_selection_reg_weight: 5
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
-      gate_estimator_weight: 10
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
-      top_k: 256
-      n_concepts: "{{n_ground_truth_concepts}}"
-      aggr_key: "{model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction})"
-      extra_name: "k_{n_concepts}_n_supervised_concepts_{n_supervised_concepts}_annotated_{concept_supervision_annotated_fraction}"
-      early_stop_metric: "val_accuracy"
-      early_stop_mode: "max"
-      early_stop_metric_pretrain: "val_loss"
-      early_stop_mode_pretrain: "min"
-      patience: .inf
-      n_supervised_concepts: [1, 2]
-      concept_supervision_annotated_fraction: [0.25, 1]
-      concept_prediction_weight: 0.1
-      grid_variables:
-          - n_supervised_concepts
-          - concept_supervision_annotated_fraction
-      grid_search_mode: exhaustive
-
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
@@ -133,11 +169,12 @@ runs:
       early_stop_mode_pretrain: "min"
       patience: .inf
       n_supervised_concepts: [1, 2]
-      concept_supervision_annotated_fraction: [0.25, 1]
-      concept_prediction_weight: 1
+      concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
+      concept_prediction_weight: [5] #[0.1, 1, 5]
       grid_variables:
           - n_supervised_concepts
           - concept_supervision_annotated_fraction
+          - concept_prediction_weight
       grid_search_mode: exhaustive
 
 

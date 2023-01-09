@@ -103,7 +103,12 @@ def brute_force_concept_mask_aucs(
             ),
         )
     for permutation in perms:
-        current_masks = concept_importance_masks[permutation, :]
+        if len(concept_importance_masks) < len(ground_truth_concept_masks):
+            reference_masks = ground_truth_concept_masks[permutation, :]
+            current_masks = concept_importance_masks
+        else:
+            reference_masks = ground_truth_concept_masks
+            current_masks = concept_importance_masks[permutation, :]
         current_aucs = []
         for i in range(min(
             ground_truth_concept_masks.shape[0],
@@ -112,7 +117,7 @@ def brute_force_concept_mask_aucs(
             mask = current_masks[i, :]
             if thresh is not None:
                 mask = (mask >= thresh).astype(np.int32)
-            ground_truth = ground_truth_concept_masks[i, :]
+            ground_truth = reference_masks[i, :]
             current_aucs.append(sklearn.metrics.roc_auc_score(
                 ground_truth,
                 mask,
@@ -142,20 +147,25 @@ def brute_force_concept_aucs(
             ),
         )
     for permutation in perms:
-        scores = concept_scores[:, permutation]
+        if concept_scores.shape[-1] < c_test.shape[-1]:
+            test_scores = c_test[:, list(filter(lambda x: x is not None, permutation))]
+            scores = concept_scores
+        else:
+            test_scores = c_test
+            scores = concept_scores[:, permutation]
         current_aucs = []
         for i in range(min(
-            c_test.shape[-1],
+            test_scores.shape[-1],
             concept_scores.shape[-1],
         )):
             # We take the max as the concept may be flipped
             current_score = max(
                 sklearn.metrics.roc_auc_score(
-                    c_test[:, i],
+                    test_scores[:, i],
                     scores[:, i],
                 ),
                 sklearn.metrics.roc_auc_score(
-                    c_test[:, i],
+                    test_scores[:, i],
                     1 - scores[:, i],
                 ),
             )
@@ -176,6 +186,7 @@ def find_best_independent_alignment(scores, c_train):
 #     return align, purity_mat[list(range(0, scores.shape[-1])), align]
 #     return np.argmax(purity_mat, axis=0), np.max(purity_mat, axis=0)
     n_concepts = scores.shape[-1]
+    n_ground_truth = c_train.shape[-1]
     purity_mat = np.abs(np.corrcoef(np.hstack([scores, c_train]).T)[:n_concepts, n_concepts:])
     return np.argmax(purity_mat, axis=1), np.max(purity_mat, axis=1)
 
@@ -211,7 +222,13 @@ def embedding_homogeneity(
             )
             alignment = purity.find_max_alignment(purity_mat)
         # And use the new vector with its corresponding alignment
-        c_vec = c_vec[:, alignment]
+        if c_vec.shape[-1] < c_test.shape[-1]:
+            # Then the alignment will need to be done backwards as
+            # we will have to get rid of the dimensions in c_test
+            # which have no aligment at all
+            c_test = c_test[:, list(filter(lambda x: x is not None, alignment))]
+        else:
+            c_vec = c_vec[:, alignment]
     
     # compute the maximum value for the AUC
     n_clusters = np.linspace(2, c_vec.shape[0], step).astype(int)
@@ -354,16 +371,19 @@ def estimate_entropy(X, **kw):
   return estimate_mutual_information(X, X, **kw)
 
 def MIG(Z_true, Z_learned, **kw):
-  K = Z_true.shape[1]
-  gap = 0
-  for k in range(K):
-    H = estimate_entropy(Z_true[:,k], **kw)
-    MIs = sorted([
-      estimate_mutual_information(Z_learned[:,j], Z_true[:,k], **kw)
-      for j in range(Z_learned.shape[1])
-    ], reverse=True)
-    gap += (MIs[0] - MIs[1]) / (H * K)
-  return gap
+    K = Z_true.shape[1]
+    gap = 0
+    for k in range(K):
+        H = estimate_entropy(Z_true[:,k], **kw)
+        MIs = sorted([
+          estimate_mutual_information(Z_learned[:,j], Z_true[:,k], **kw)
+          for j in range(Z_learned.shape[1])
+        ], reverse=True)
+        if len(MIs) > 1:
+            gap += (MIs[0] - MIs[1]) / (H * K)
+        else:
+            gap += MIs[0] / (H * K)
+    return gap
 
 ###############################################################################
 #
@@ -387,8 +407,10 @@ def SAP(V, Z):
             z = Z[:,j].reshape(-1,1)
             scores.append(model.fit(z,v).score(z,v))
         scores = list(sorted(scores))
-
-        saps.append(scores[-1] - scores[-2])
+        if len(scores) > 1:
+            saps.append(scores[-1] - scores[-2])
+        else:
+            saps.append(scores[-1])
 
     return np.mean(saps)
 
@@ -410,7 +432,7 @@ def DCI(gen_factors, latents):
   assert importance_matrix.shape[1] == ys_train.shape[1]
   scores["informativeness_train"] = train_err
   scores["informativeness_test"] = test_err
-  scores["disentanglement"] = disentanglement(importance_matrix)
+  scores["disentanglement"] = disentanglement(importance_matrix) if latents.shape[-1] > 1 else 1
   scores["completeness"] = completeness(importance_matrix)
   return scores["disentanglement"], scores["completeness"], scores["informativeness_test"]
 
@@ -432,20 +454,18 @@ def compute_importance_gbt(x_train, y_train, x_test, y_test):
 
 
 def disentanglement_per_code(importance_matrix):
-  """Compute disentanglement score of each code."""
-  # importance_matrix is of shape [num_codes, num_factors].
-  return 1. - scipy.stats.entropy(importance_matrix.T + 1e-11,
-                                  base=importance_matrix.shape[1])
+    """Compute disentanglement score of each code."""
+    # importance_matrix is of shape [num_codes, num_factors].
+    return 1. - scipy.stats.entropy(importance_matrix.T + 1e-11, base=importance_matrix.shape[1])
 
 
 def disentanglement(importance_matrix):
-  """Compute the disentanglement score of the representation."""
-  per_code = disentanglement_per_code(importance_matrix)
-  if importance_matrix.sum() == 0.:
-    importance_matrix = np.ones_like(importance_matrix)
-  code_importance = importance_matrix.sum(axis=1) / importance_matrix.sum()
-
-  return np.sum(per_code*code_importance)
+    """Compute the disentanglement score of the representation."""
+    per_code = disentanglement_per_code(importance_matrix)
+    if importance_matrix.sum() == 0.:
+        importance_matrix = np.ones_like(importance_matrix)
+    code_importance = importance_matrix.sum(axis=1) / (importance_matrix.sum() + 1e-12)
+    return np.sum(per_code*code_importance)
 
 def completeness_per_factor(importance_matrix):
   """Compute completeness of each factor."""
