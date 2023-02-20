@@ -249,7 +249,8 @@ def main(
     Path(experiment_config['results_dir']).mkdir(parents=True, exist_ok=True)
     # Write down the actual command executed
     with open(os.path.join(experiment_config['results_dir'], "command.txt"), "w") as f:
-        f.write("python " + " ".join(sys.argv))
+        args = [arg if " " not in arg else f'"{arg}"' for arg in sys.argv]
+        f.write("python " + " ".join(args))
     
     ############################################################################
     ## Load the config
