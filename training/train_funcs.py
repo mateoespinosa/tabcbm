@@ -8,6 +8,8 @@ import multiprocessing
 import gc
 import logging
 import itertools
+from datetime import datetime
+
 
 from collections import defaultdict
 from pathlib import Path
@@ -137,6 +139,7 @@ def experiment_loop(
     logging.info(f'Setting log level to: "{loglevel}"')
     
     rerun_models = list(map(lambda x: x.strip().lower(), os.environ.get('RERUN_MODELS', "").split(",")))
+    retrain_models = list(map(lambda x: x.strip().lower(), os.environ.get('RETRAIN_MODELS', "").split(",")))
     # We will accumulate all results in a table for easier reading
     results_table = PrettyTable()
     field_names = [
@@ -195,6 +198,8 @@ def experiment_loop(
     base_results_dir = experiment_config["results_dir"]
     partial_results = defaultdict(list)
     for trial in range(experiment_config["trials"]):
+        now = datetime.now()
+        print(f"[TRIAL {trial + 1}/{experiment_config['trials']} BEGINS AT {now.strftime('%d/%m/%Y at %H:%M:%S')}")
         # And then over all runs in a given trial
         extra_hypers = {}
         if data_generator is not None:
@@ -384,10 +389,12 @@ def experiment_loop(
                 extra_name = run_config.get('extra_name', "").format(**run_config)
                 if extra_name:
                     extra_name = "_" + extra_name
+                now = datetime.now()
                 logging.info(
                     f"\tRunning Trial {trial + 1}/{experiment_config['trials']} "
-                    f"for {arch}{extra_name}:"
+                    f"for {arch}{extra_name} starting {now.strftime('%d/%m/%Y at %H:%M:%S')}:"
                 )
+                
                 utils.print_gpu_usage()
                 
                 # Serialize the configuration we will be using for these experiments
@@ -405,25 +412,38 @@ def experiment_loop(
                     old_results = joblib.load(local_results_path)
 
                 if (run_config.get('n_supervised_concepts', 0) > 0) and (c_train is not None):
+                    n_sup = run_config.get('n_supervised_concepts', 0)
                     logging.debug(
                         f"We will provide supervision "
                         f"for {run_config.get('n_supervised_concepts')} concepts"
                     )
-                    if (load_from_cache and (not run_config.get('force_rerun', False))) and (
-                        'supervised_concept_idxs' in (old_results or {})
-                    ):
-                        supervised_concept_idxs = old_results['supervised_concept_idxs']
+                    path = os.path.join(
+                        run_config["results_dir"],
+                        f"sampled_concept_idxs_{n_sup}_trial_{trial}.npy",
+                    )
+                    if os.path.exists(path):
+                        concept_idxs = np.load(path)
+#                     elif (load_from_cache and (not run_config.get('force_rerun', False))) and (
+#                         'supervised_concept_idxs' in (old_results or {})
+#                     ):
+#                         concept_idxs = old_results['supervised_concept_idxs']
                     else:
-                        np.random.seed(trial + run_config.get('seed', 0))
+                        np.random.seed(trial + run_config.get('seed', 42))
                         concept_idxs = np.random.permutation(
                             list(range(run_config['n_ground_truth_concepts']))
                         )
                         concept_idxs = sorted(concept_idxs[:run_config['n_supervised_concepts']])
+                    np.save(path, concept_idxs)
                     run_config['supervised_concept_idxs'] = concept_idxs
                     logging.debug(f"\tSupervising on concepts {concept_idxs}")
-
+                
+                force_rerun = run_config.get('force_rerun', False) or (
+                    run_config['model'].lower() in retrain_models
+                )
                 if print_cache_only and (
                     run_config['model'].lower() not in rerun_models
+                ) and (
+                    run_config['model'].lower() not in retrain_models
                 ) and (
                     load_from_cache and (not run_config.get('force_rerun', False))
                 ) and (
@@ -439,7 +459,7 @@ def experiment_loop(
                         x_test=x_test,
                         y_test=y_test,
                         c_test=c_test,
-                        load_from_cache=load_from_cache and (not run_config.get('force_rerun', False)),
+                        load_from_cache=load_from_cache and (not force_rerun),
                         prefix="\t\t\t",
                         seed=(trial + run_config.get('seed', 0)),
                         extra_name=(extra_name + f"_trial_{trial}"),
@@ -469,7 +489,7 @@ def experiment_loop(
                             x_test=x_test,
                             y_test=y_test,
                             c_test=c_test,
-                            load_from_cache=load_from_cache and (not run_config.get('force_rerun', False)),
+                            load_from_cache=load_from_cache and (not force_rerun),
                             prefix="\t\t\t",
                             seed=(trial + run_config.get('seed', 0)),
                             extra_name=(extra_name + f"_trial_{trial}"),
@@ -486,9 +506,11 @@ def experiment_loop(
                             f'Subprocess for trial {trial + 1} of {arch}{extra_name} failed!'
                         )
                     p.kill()
-
+                then = datetime.now()
+                diff = then - now
+                diff_minutes = diff.total_seconds() / 60
                 logging.debug(
-                    f"\tTrial {trial + 1} COMPLETED for {arch}{extra_name}:"
+                    f"\tTrial {trial + 1} COMPLETED for {arch}{extra_name} ending at {then.strftime('%d/%m/%Y at %H:%M:%S')} ({diff_minutes:.4f} minutes):"
                 )
                 # Figure out how we will aggregate results from different runs
                 aggr_key = run_config.get('aggr_key', '{model}' + extra_name).format(

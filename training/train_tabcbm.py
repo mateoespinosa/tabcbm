@@ -1058,7 +1058,7 @@ def train_tabcbm(
                 end_results[key] = utils.posible_load(
                     key=key,
                     old_results=old_results,
-                    load_from_cache=False, #load_from_cache,
+                    load_from_cache=load_from_cache,
                     run_fn=_run,
                 )
                 logging.debug(
