@@ -641,7 +641,9 @@ def train_tabcbm(
         load_from_cache=load_from_cache,
         prefix=prefix,
     )
-        
+    
+    n_ground_truth_concepts = -1
+    
     if (
         (c_train is not None) and
         (c_test is not None) and
@@ -659,7 +661,9 @@ def train_tabcbm(
         
         
         n_ground_truth_concepts = c_train.shape[-1]
-        corr_mat = np.corrcoef(np.hstack([train_concept_scores, c_train]).T)[:train_concept_scores.shape[-1], train_concept_scores.shape[-1]:]
+        corr_mat = np.corrcoef(
+            np.hstack([train_concept_scores, c_train]).T
+        )[:train_concept_scores.shape[-1], train_concept_scores.shape[-1]:]
         for thresh in threshs:
             _, test_bottleneck = tabcbm.predict_bottleneck(x_test)
             test_bottleneck = test_bottleneck.numpy()
@@ -670,7 +674,6 @@ def train_tabcbm(
             end_results[f'from_ground_upper_bound_thresh_{thresh}'] = upper_limit
             end_results[f'intervenable_ground_truth_concepts_thresh_{thresh}'] = intervenable_ground_truth_concepts
             for num_intervened_concepts in range(1, upper_limit + 1):
-                
                 def _run():
                     avg = 0.0
                     times_computed = 0
@@ -863,6 +866,208 @@ def train_tabcbm(
                 )
                 if thresh == threshs[-1]:
                      end_results[f'acc_intervention_{num_intervened_concepts}'] = end_results[key]
+        
+        # Now do the same but only for supervised concepts!
+        if (
+            (experiment_config.get("n_supervised_concepts", 0) != 0) and
+            (len(experiment_config.get('supervised_concept_idxs', [])) > 0)
+        ):
+            sup_concepts_idxs = experiment_config['supervised_concept_idxs']
+            for thresh in threshs:
+                selected_concepts = end_results['best_ind_alignment_auc'] >= thresh
+                for i, selected in enumerate(selected_concepts):
+                    if selected and (i not in sup_concepts_idxs):
+                        # Then turn it off!
+                        selected_concepts[i] = False
+                corresponding_real_concepts = np.array(
+                    end_results['best_independent_alignment']
+                )
+
+
+                selected_concepts_idxs = np.array(
+                    list(range(experiment_config['n_concepts']))
+                )[selected_concepts]        
+                corresponding_real_concepts = corresponding_real_concepts[selected_concepts]
+
+                end_results[f'sup_interveneable_concepts_thresh_{thresh}'] = np.sum(selected_concepts)
+                interveneable_concepts = end_results[f'sup_interveneable_concepts_thresh_{thresh}']
+                logging.debug(
+                    prefix + f"\t\t\tNumber of supervised concepts we will intervene on " +
+                    f"is {interveneable_concepts}/{experiment_config['n_concepts']}"
+                )
+                _, test_bottleneck = tabcbm.predict_bottleneck(x_test)
+                test_bottleneck = test_bottleneck.numpy()
+                one_hot_labels = tf.keras.utils.to_categorical(y_test)
+                for num_intervened_concepts in range(1, interveneable_concepts + 1):
+                    def _run():
+                        avg = 0.0
+                        for i in range(experiment_config.get('intervention_trials', 5)):
+                            current_sel = np.random.permutation(
+                                list(range(len(selected_concepts_idxs)))
+                            )[:num_intervened_concepts]
+
+                            fixed_used_concept_idxs = selected_concepts_idxs[current_sel]
+                            real_corr_concept_idx = corresponding_real_concepts[current_sel]
+                            new_test_bottleneck = test_bottleneck[:, :]
+                            # We need to figure out the "direction" of the intervention:
+                            #     There is not reason why a learnt concept aligned such that its
+                            #     corresponding ground truth concept is high when the learnt concept
+                            #     is high. Because they are binary, it could perfectly be the case
+                            #     that the alignment happend with the complement.
+                            for learnt_concept_idx, real_concept_idx in zip(
+                                fixed_used_concept_idxs,
+                                real_corr_concept_idx,
+                            ):
+                                correlation = np.corrcoef(
+                                    train_concept_scores[:, learnt_concept_idx],
+                                    c_train[:, real_concept_idx],
+                                )[0, 1]
+                                pos_score = np.percentile(
+                                    train_concept_scores[:, learnt_concept_idx],
+                                    95
+                                )
+                                neg_score = np.percentile(
+                                    train_concept_scores[:, learnt_concept_idx],
+                                    5
+                                )
+                                if correlation > 0:
+                                    # Then this is a positive alignment
+                                    new_test_bottleneck[:, learnt_concept_idx] = \
+                                        c_test[:, real_concept_idx] * pos_score + (
+                                            (1 - c_test[:, real_concept_idx]) * neg_score
+                                        )
+                                else:
+                                    # Else we are aligned with the complement
+                                    new_test_bottleneck[:, learnt_concept_idx] =  \
+                                        (1 - c_test[:, real_concept_idx]) * pos_score + (
+                                            c_test[:, real_concept_idx] * neg_score
+                                        )
+                            partial_acc = sklearn.metrics.accuracy_score(
+                                y_test,
+                                np.argmax(
+                                    scipy.special.softmax(
+                                        tabcbm.from_bottleneck(new_test_bottleneck),
+                                        axis=-1,
+                                    ),
+                                    axis=-1
+                                ),
+                            )
+                            avg += partial_acc
+                        return avg / experiment_config.get('intervention_trials', 5)
+
+                    key = f'sup_acc_intervention_{num_intervened_concepts}_thresh_{thresh}'
+                    end_results[key] = utils.posible_load(
+                        key=key,
+                        old_results=old_results,
+                        load_from_cache=load_from_cache,
+                        run_fn=_run,
+                    )
+                    logging.debug(
+                        prefix +
+                        f"\t\t\tSupervised intervention accuracy with {num_intervened_concepts} "
+                        f"concepts (thresh = {thresh} with {interveneable_concepts} supervised interveneable concepts): {end_results[key] * 100:.2f}%"
+                    )
+                    if thresh == threshs[-1]:
+                         end_results[f'sup_acc_intervention_{num_intervened_concepts}'] = end_results[key]
+        
+        # Now do the same but only for UNSUPERVISED concepts!
+        sup_concepts_idxs = experiment_config.get('supervised_concept_idxs', [])
+        for thresh in threshs:
+            selected_concepts = end_results['best_ind_alignment_auc'] >= thresh
+            for i, selected in enumerate(selected_concepts):
+                if selected and (i in sup_concepts_idxs):
+                    # Then turn it off as this was one of the concepts given during supervision!
+                    selected_concepts[i] = False
+            corresponding_real_concepts = np.array(
+                end_results['best_independent_alignment']
+            )
+
+
+            selected_concepts_idxs = np.array(
+                list(range(experiment_config['n_concepts']))
+            )[selected_concepts]        
+            corresponding_real_concepts = corresponding_real_concepts[selected_concepts]
+
+            end_results[f'unsup_interveneable_concepts_thresh_{thresh}'] = np.sum(selected_concepts)
+            interveneable_concepts = end_results[f'unsup_interveneable_concepts_thresh_{thresh}']
+            logging.debug(
+                prefix + f"\t\t\tNumber of supervised concepts we will intervene on " +
+                f"is {interveneable_concepts}/{experiment_config['n_concepts']}"
+            )
+            _, test_bottleneck = tabcbm.predict_bottleneck(x_test)
+            test_bottleneck = test_bottleneck.numpy()
+            one_hot_labels = tf.keras.utils.to_categorical(y_test)
+            for num_intervened_concepts in range(1, interveneable_concepts + 1):
+                def _run():
+                    avg = 0.0
+                    for i in range(experiment_config.get('intervention_trials', 5)):
+                        current_sel = np.random.permutation(
+                            list(range(len(selected_concepts_idxs)))
+                        )[:num_intervened_concepts]
+
+                        fixed_used_concept_idxs = selected_concepts_idxs[current_sel]
+                        real_corr_concept_idx = corresponding_real_concepts[current_sel]
+                        new_test_bottleneck = test_bottleneck[:, :]
+                        # We need to figure out the "direction" of the intervention:
+                        #     There is not reason why a learnt concept aligned such that its
+                        #     corresponding ground truth concept is high when the learnt concept
+                        #     is high. Because they are binary, it could perfectly be the case
+                        #     that the alignment happend with the complement.
+                        for learnt_concept_idx, real_concept_idx in zip(
+                            fixed_used_concept_idxs,
+                            real_corr_concept_idx,
+                        ):
+                            correlation = np.corrcoef(
+                                train_concept_scores[:, learnt_concept_idx],
+                                c_train[:, real_concept_idx],
+                            )[0, 1]
+                            pos_score = np.percentile(
+                                train_concept_scores[:, learnt_concept_idx],
+                                95
+                            )
+                            neg_score = np.percentile(
+                                train_concept_scores[:, learnt_concept_idx],
+                                5
+                            )
+                            if correlation > 0:
+                                # Then this is a positive alignment
+                                new_test_bottleneck[:, learnt_concept_idx] = \
+                                    c_test[:, real_concept_idx] * pos_score + (
+                                        (1 - c_test[:, real_concept_idx]) * neg_score
+                                    )
+                            else:
+                                # Else we are aligned with the complement
+                                new_test_bottleneck[:, learnt_concept_idx] =  \
+                                    (1 - c_test[:, real_concept_idx]) * pos_score + (
+                                        c_test[:, real_concept_idx] * neg_score
+                                    )
+                        partial_acc = sklearn.metrics.accuracy_score(
+                            y_test,
+                            np.argmax(
+                                scipy.special.softmax(
+                                    tabcbm.from_bottleneck(new_test_bottleneck),
+                                    axis=-1,
+                                ),
+                                axis=-1
+                            ),
+                        )
+                        avg += partial_acc
+                    return avg / experiment_config.get('intervention_trials', 5)
+
+                key = f'unsup_acc_intervention_{num_intervened_concepts}_thresh_{thresh}'
+                end_results[key] = utils.posible_load(
+                    key=key,
+                    old_results=old_results,
+                    load_from_cache=False, #load_from_cache,
+                    run_fn=_run,
+                )
+                logging.debug(
+                    prefix +
+                    f"\t\t\tUnsupervised intervention accuracy with {num_intervened_concepts} "
+                    f"concepts (thresh = {thresh} with {interveneable_concepts} unsupervised interveneable concepts): {end_results[key] * 100:.2f}%"
+                )
+                if thresh == threshs[-1]:
+                     end_results[f'unsup_acc_intervention_{num_intervened_concepts}'] = end_results[key]
         
         for thresh in threshs:
             selected_concepts = end_results['best_ind_alignment_auc'] >= thresh

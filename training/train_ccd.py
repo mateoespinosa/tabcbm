@@ -18,6 +18,11 @@ import training.representation_evaluation as representation_evaluation
 ## CCD Training
 ############################################
 
+def ccd_compute_k(y, batch_size):
+    _, counts = np.unique(y, return_counts=True)
+    avg_class_ratio = np.mean(counts) / y.shape[0]
+    return int((avg_class_ratio * batch_size) / 2)
+
 def train_ccd(
     experiment_config,
     x_train,
@@ -193,13 +198,18 @@ def train_ccd(
             tf.cast(y_true, tf.int32),
             tf.cast(tf.math.sigmoid(y_pred) >= 0.5, tf.int32)
         )
+    if experiment_config.get('top_k', None) not in [None, 0]:
+        top_k = experiment_config['top_k']
+    else:
+        # Else let's compute top k as suggested by Yeh et al.
+        c = ccd_compute_k(y=y_train, batch_size=experiment_config["batch_size"])
     topic_model = CCD.TopicModel(
         concepts_to_labels_model=decoder,
         n_channels=experiment_config["latent_dims"],
         n_concepts=experiment_config['n_concepts'],
         threshold=experiment_config.get("threshold", 0.5),
         loss_fn=end_to_end_model.loss,
-        top_k=experiment_config.get("top_k", 32),
+        top_k=top_k,
         lambda1=experiment_config.get("lambda1", 0.1),
         lambda2=experiment_config.get("lambda2", 0.1),
         seed=seed,

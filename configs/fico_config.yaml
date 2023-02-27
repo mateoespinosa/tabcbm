@@ -33,6 +33,10 @@ shared_params:
     usable_concept_threshold: 0.85
 
 runs:
+    - model: 'TabTransformer'
+      mlp_hidden_mults: [32, 32, 32, 16, 16]
+      early_stop_metric: 'val_y_accuracy'
+      
     - model: 'MLP'
       latent_act: 'relu'
       include_bn: True
@@ -86,7 +90,7 @@ runs:
       zero_mask: True
       normalized_scores: True
       temperature: 1
-      top_k: 512 #1024
+      top_k: 512
       n_concepts: [8, 6, 4]
       aggr_key: "{model} (smaller k={n_concepts}, latent={latent_dims}, w1={weight_used_1}, w2={weight_used_2})"
       extra_name: "smaller_k_{n_concepts}_latent_{latent_dims}_weight1_{weight_used_1}_weight2_{weight_used_2}"

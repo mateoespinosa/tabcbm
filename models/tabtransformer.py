@@ -118,6 +118,7 @@ class Attention(nn.Module):
 
     def forward(self, x):
         h = self.heads
+        
         q, k, v = self.to_qkv(x).chunk(3, dim = -1)
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), (q, k, v))
         sim = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale
@@ -145,7 +146,6 @@ class Transformer(nn.Module):
 
     def forward(self, x):
         x = self.embeds(x)
-
         for attn, ff in self.layers:
             x = attn(x)
             x = ff(x)
@@ -191,7 +191,7 @@ class TabTransformer(pl.LightningModule):
         dim_out=1,
         mlp_hidden_mults=(4, 2),
         mlp_act=None,
-        num_special_tokens=2,
+        num_special_tokens=0,
         continuous_mean_std=None,
         attn_dropout=0.,
         ff_dropout=0.,
@@ -209,7 +209,6 @@ class TabTransformer(pl.LightningModule):
         self.momentum = momentum
         
         # categories related calculations
-
         self.num_categories = len(categories)
         self.num_unique_categories = sum(categories)
         self.cat_idxs = cat_idxs

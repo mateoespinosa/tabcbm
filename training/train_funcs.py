@@ -135,6 +135,8 @@ def experiment_loop(
     )
     loglevel = os.environ['LOGLEVEL']
     logging.info(f'Setting log level to: "{loglevel}"')
+    
+    rerun_models = list(map(lambda x: x.strip().lower(), os.environ.get('RERUN_MODELS', "").split(",")))
     # We will accumulate all results in a table for easier reading
     results_table = PrettyTable()
     field_names = [
@@ -349,7 +351,7 @@ def experiment_loop(
                     extra_kwargs = dict(
                         ground_truth_concept_masks=ground_truth_concept_masks,
                         cat_feat_inds=cat_feat_inds,
-                        cat_dims=cat_dims,
+                        # Don't pass cat_dims as we actually learn them from data.
                     )
                 elif arch_name == "mlp":
                     train_fn = train_mlp
@@ -420,7 +422,11 @@ def experiment_loop(
                     run_config['supervised_concept_idxs'] = concept_idxs
                     logging.debug(f"\tSupervising on concepts {concept_idxs}")
 
-                if print_cache_only and (load_from_cache and (not run_config.get('force_rerun', False))) and (
+                if print_cache_only and (
+                    run_config['model'].lower() not in rerun_models
+                ) and (
+                    load_from_cache and (not run_config.get('force_rerun', False))
+                ) and (
                     old_results is not None
                 ):
                     trial_results = old_results
@@ -448,7 +454,7 @@ def experiment_loop(
                     # for the GPU is not necessarily freed once the method returns
                     manager = multiprocessing.Manager()
                     trial_results = manager.dict()
-                    if arch_name in ["tabnet", "xgboost", "lightgbm"]:
+                    if arch_name in ["xgboost", "lightgbm"]:
                         context = multiprocessing
                     else:
                         context = multiprocessing.get_context('spawn')

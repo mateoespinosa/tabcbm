@@ -45,12 +45,27 @@ def train_tabtransformer(
     utils.restart_seeds(seed)
     end_results =  trial_results if trial_results is not None else {}
     cat_feat_inds = cat_feat_inds or []
-    cat_dims = cat_dims or []
     old_results = (old_results or {}) if load_from_cache else {}
     verbosity = experiment_config.get("verbosity", 0)
     
     num_continuous = x_train.shape[1] - len(cat_feat_inds)
     cont_idxs = [i for i in range(x_train.shape[1]) if i not in cat_feat_inds]
+    remap_cat_dims = []
+    cat_dims = []
+    for cat_dim in (cat_feat_inds or []):
+        unique_vals = sorted(np.unique(x_train[:, cat_dim]))
+        print("For cat dim", cat_dim, "unique training values are:", unique_vals)
+        remap_cat_dims.append(dict([(val, i) for i, val in enumerate(unique_vals)]))
+        cat_dims.append(len(unique_vals))
+    if len(cat_feat_inds or []):
+        for i in range(x_train.shape[0]):
+            for remap, cat_dim in zip(remap_cat_dims, (cat_feat_inds or [])):
+                x_train[i, cat_dim] = remap[x_train[i, cat_dim]]
+        for i in range(x_test.shape[0]):
+            for remap, cat_dim in zip(remap_cat_dims, (cat_feat_inds or [])):
+                x_test[i, cat_dim] = remap[x_test[i, cat_dim]]
+    print("cat_feat_inds =", cat_feat_inds)
+    print("cat_dims =", cat_dims)
     tabtransformer_params = dict(
         cat_idxs=cat_feat_inds,
         cont_idxs=cont_idxs,
@@ -101,7 +116,8 @@ def train_tabtransformer(
         max_epochs=experiment_config['max_epochs'],
         check_val_every_n_epoch=experiment_config.get("check_val_every_n_epoch", 5),
         callbacks=callbacks,
-        logger=True,
+        logger=False, #True,
+        enable_checkpointing=False,
     )
     
     if experiment_config["holdout_fraction"]:
@@ -202,6 +218,13 @@ def train_tabtransformer(
             multi_class='ovo',
         )
     else:
+        if len(preds.shape) == 2:
+            preds = np.argmax(preds, axis=-1)
+        elif np.min(preds) < 0 and np.max(preds) > 1:
+            preds = tf.math.sigmoid(preds).numpy()
+        
+        preds = (preds > 0.5).astype(np.int32)
+        y_test = y_test.astype(np.int32)
         end_results['acc'] = sklearn.metrics.accuracy_score(
             y_test,
             preds,

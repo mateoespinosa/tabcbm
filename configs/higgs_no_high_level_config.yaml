@@ -34,6 +34,12 @@ shared_params:
     usable_concept_threshold: 0.85
 
 runs:
+    - model: 'TabTransformer'
+      mlp_hidden_mults: [1024, 512, 256, 128, 64, 32, 16]
+      early_stop_metric: 'val_y_accuracy'
+      max_epochs: 100
+      patience: 15 # Otherwise it is too computationally expensive without little gains for TabTransformer
+      
     - model: 'TabCBM'
       pretrain_epochs: 25
       self_supervised_train_epochs: 25

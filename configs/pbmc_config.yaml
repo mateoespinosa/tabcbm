@@ -35,6 +35,10 @@ shared_params:
     usable_concept_threshold: 0.85
 
 runs:
+    - model: 'TabTransformer'
+#       mlp_hidden_mults: [128, 64, 32, 8, 16, 16]
+      mlp_hidden_mults: [16, 16, 16, 16, 16]
+      
     - model: 'TabCBM'
       early_stop_metric: "val_sparse_top_k_categorical_accuracy"
       early_stop_mode: "max"
