@@ -34,10 +34,6 @@ runs:
     - model: 'PCA'
       n_concepts: "{{n_ground_truth_concepts}}"
     
-    - model: 'TabTransformer'
-      mlp_hidden_mults: [16, 16, 16]
-      patience: 250
-    
     - model: 'CEM'
       include_bn: True
       encoder_units: [16, 16]
@@ -220,6 +216,10 @@ runs:
       decoder_units: [64, 64]
       extra_name: "large"
       mlp_extra_units: [16]
+    
+    - model: 'TabTransformer'
+      mlp_hidden_mults: [16, 16, 16]
+      patience: 250
 
     - model: 'XGBoost'
       extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'

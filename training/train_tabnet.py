@@ -1,13 +1,16 @@
+import sys
+sys.path.append('.')
 import sklearn
 import tensorflow as tf
 import numpy as np
 import metrics
 import os
+
 from pathlib import Path
 import joblib
 from sklearn.model_selection import train_test_split
-from pytorch_tabnet.tab_model import TabNetClassifier
-from pytorch_tabnet.pretraining import TabNetPretrainer
+from local_pytorch_tabnet.tab_model import TabNetClassifier
+from local_pytorch_tabnet.pretraining import TabNetPretrainer
 import torch
 import shutil
 import zipfile
@@ -118,7 +121,19 @@ def train_tabnet(
     end_results =  trial_results if trial_results is not None else {}
     old_results = (old_results or {}) if load_from_cache else {}
     verbosity = experiment_config.get("verbosity", 0)
-    
+    remap_cat_dims = []
+    cat_dims = []
+    for cat_dim in (cat_feat_inds or []):
+        unique_vals = sorted(np.unique(x_train[:, cat_dim]).astype(np.int32))
+        remap_cat_dims.append(dict([(val, i) for i, val in enumerate(unique_vals)]))
+        cat_dims.append(len(unique_vals))
+    if len(cat_feat_inds or []):
+        for i in range(x_train.shape[0]):
+            for remap, cat_dim in zip(remap_cat_dims, (cat_feat_inds or [])):
+                x_train[i, cat_dim] = remap[x_train[i, cat_dim]]
+        for i in range(x_test.shape[0]):
+            for remap, cat_dim in zip(remap_cat_dims, (cat_feat_inds or [])):
+                x_test[i, cat_dim] = remap[x_test[i, cat_dim]]
     tabnet_params = dict(
         n_d=experiment_config.get('n_d', 8),
         n_a=experiment_config.get('n_a', 8),
@@ -224,7 +239,9 @@ def train_tabnet(
         tabnet = TabNetClassifier(**tabnet_params)
         _, time_trained = utils.timeit(
             tabnet.fit,
+#             X_train=torch.cuda.FloatTensor(x_train),
             X_train=x_train,
+#             y_train=torch.cuda.LongTensor(y_train),
             y_train=y_train,
             eval_set=eval_set,
             max_epochs=experiment_config["max_epochs"],

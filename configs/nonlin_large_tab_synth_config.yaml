@@ -62,7 +62,7 @@ runs:
       pretrain_epochs: 100
       include_bn: True
       pass_concept_logits: False
-      concept_loss_weight: [0.1, 1, 5]
+      concept_loss_weight: [5] # Values tried during hyper-parameter tunning: [0.1, 1, 5]
       n_supervised_concepts: [1, 2, 3, 4, 5]
       concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
       n_concepts: "{{n_ground_truth_concepts}}"
@@ -80,7 +80,7 @@ runs:
       pretrain_epochs: 100
       include_bn: True
       pass_concept_logits: False
-      concept_loss_weight: [0.1, 1, 5]
+      concept_loss_weight: [5] # Values tried during hyper-parameter tunning: [0.1, 1, 5]
       n_supervised_concepts: [1, 2, 3, 4, 5]
       concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
       n_concepts: "{{n_supervised_concepts}}"
@@ -146,7 +146,7 @@ runs:
       grid_variables:
           - n_concepts
       grid_search_mode: exhaustive
-      
+    
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
@@ -173,12 +173,13 @@ runs:
       patience: .inf
       n_supervised_concepts: [1, 2, 3, 4, 5]
       concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
-      concept_prediction_weight: [0.01, 0.1, 1, 5, 10, 100]
+      concept_prediction_weight: [5] ## Values tried during hyper-parameter tunning: [0.01, 0.1, 1, 5, 10, 100]
       grid_variables:
           - n_supervised_concepts
           - concept_supervision_annotated_fraction
           - concept_prediction_weight
       grid_search_mode: exhaustive
+
 
     
     - model: 'TabNet'

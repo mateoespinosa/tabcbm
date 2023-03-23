@@ -202,7 +202,8 @@ def train_ccd(
         top_k = experiment_config['top_k']
     else:
         # Else let's compute top k as suggested by Yeh et al.
-        c = ccd_compute_k(y=y_train, batch_size=experiment_config["batch_size"])
+        top_k = ccd_compute_k(y=y_train, batch_size=experiment_config["batch_size"])
+    print("CCD's top k is:", top_k)
     topic_model = CCD.TopicModel(
         concepts_to_labels_model=decoder,
         n_channels=experiment_config["latent_dims"],

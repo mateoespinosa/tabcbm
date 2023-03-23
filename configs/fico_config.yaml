@@ -9,7 +9,7 @@ shared_params:
     continuous_concepts: True
 
     # Model configuration
-    encoder_units: [32, 32, 32] #[128, 64, 32]
+    encoder_units: [32, 32, 32]
     decoder_units: [16]
     latent_dims: 16
 
@@ -25,8 +25,8 @@ shared_params:
     patience: 300
     min_delta: 1.0E-5
     holdout_fraction: 0.1
-    early_stop_metric: "val_accuracy" #"val_loss"
-    early_stop_mode: "max" #"min"
+    early_stop_metric: "val_accuracy"
+    early_stop_mode: "max"
 
     # Metrics variables
     cas_step: 10
@@ -168,7 +168,7 @@ runs:
 
     
     - model: 'SENN'
-      pretrain_autoencoder_epochs: 0 #100 Having trouble with pretraining instabilities here
+      pretrain_autoencoder_epochs: 0 # Before 04/03/23: 0 #100 Having trouble with pretraining instabilities here
       regularization_strength: [0.01, 0.1]
       sparsity_strength: [2.0E-5, 2.0E-3]
       coefficient_model_units: [300, 300]
@@ -191,7 +191,7 @@ runs:
       extra_name: "k_{n_concepts}_lambda1_{lambda1}__lambda2_{lambda2}"
       lambda1: [0.1, 1]
       lambda2: [0.1, 1]
-      top_k: 2048
+      top_k: null # Before 04/03/23: 2048
       threshold: 0.0
       grid_variables:
           - n_concepts

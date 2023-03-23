@@ -21,7 +21,7 @@ shared_params:
     # Training variables
     batch_size: 1024
     virtual_batch_size: 1024
-    top_k: 512
+    top_k: null # Before 04/03/23: 512
     max_epochs: 1500
     learning_rate: 1.0E-3
     patience: 250
@@ -73,9 +73,9 @@ runs:
 
     - model: 'TabNet'
       pretrain_epochs: [0]
-      n_d: [16] #[32]
-      n_a: 16 #32
-      n_steps: [3] #[5]
+      n_d: [16]
+      n_a: 16
+      n_steps: [3]
       gamma: 2.0
       momentum: 0.9
       lambda_sparse: 0.000001
@@ -124,8 +124,8 @@ runs:
     
     - model: 'SENN'
       pretrain_autoencoder_epochs: 50
-      regularization_strength: [0.1] #[0.01, 0.1]
-      sparsity_strength: [2.0E-5] #[2.0E-5, 2.0E-3]
+      regularization_strength: [0.1] # Tried: [0.01, 0.1]
+      sparsity_strength: [2.0E-5] #Tried: [2.0E-5, 2.0E-3]
       coefficient_model_units: [300, 300]
       aggr_key: "{model} (k={n_concepts}, pre_train={pretrain_autoencoder_epochs}, reg={regularization_strength}, sparsity={sparsity_strength})"
       extra_name: "k_{n_concepts}_pre_train_{pretrain_autoencoder_epochs}_reg_{regularization_strength}_sparsity_{sparsity_strength}"
@@ -141,14 +141,15 @@ runs:
       n_concepts: [8, 6, 4]
       aggr_key: "{model} (k={n_concepts}, lambda1={lambda1}, lambda2={lambda2})"
       extra_name: "k_{n_concepts}_lambda1_{lambda1}__lambda2_{lambda2}"
-      lambda1: [0.1] #, 0.1, 1]
-      lambda2: [0.1] #, 0.1, 1]
+      lambda1: [0.1] #Tried: [0.1, 1]
+      lambda2: [0.1] # Tried: [0.1, 1]
       threshold: 0.0
       grid_variables:
           - n_concepts
           - lambda1
           - lambda2
       grid_search_mode: exhaustive
+
   
 
 

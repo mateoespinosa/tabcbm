@@ -347,8 +347,8 @@ def experiment_loop(
                     cast_fn = lambda x: x.astype(np.float32)
                     extra_kwargs = dict(
                         ground_truth_concept_masks=ground_truth_concept_masks,
-#                         cat_feat_inds=cat_feat_inds,
-#                         cat_dims=cat_dims,
+                        cat_feat_inds=cat_feat_inds,
+                        cat_dims=cat_dims,
                     )
                 elif arch_name == "tabtransformer":
                     train_fn = train_tabtransformer
@@ -369,8 +369,8 @@ def experiment_loop(
                     train_fn = train_senn
                     cast_fn = lambda x: x.astype(np.float32)
                     extra_kwargs = dict(
-#                         cat_feat_inds=cat_feat_inds,
-#                         cat_dims=cat_dims,
+                        cat_feat_inds=cat_feat_inds,
+                        cat_dims=cat_dims,
                     )
                 else:
                     raise ValueError(f'Unsupported model architecture "{arch}"')
@@ -440,12 +440,12 @@ def experiment_loop(
                 force_rerun = run_config.get('force_rerun', False) or (
                     run_config['model'].lower() in retrain_models
                 )
-                if print_cache_only and (
+                if trial < run_config.get('start_trial', 0) - 1:
+                    force_rerun = False
+                if (not force_rerun) and print_cache_only and (
                     run_config['model'].lower() not in rerun_models
                 ) and (
-                    run_config['model'].lower() not in retrain_models
-                ) and (
-                    load_from_cache and (not run_config.get('force_rerun', False))
+                    load_from_cache
                 ) and (
                     old_results is not None
                 ):
