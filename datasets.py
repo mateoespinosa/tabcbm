@@ -421,7 +421,6 @@ def generate_pbmc_data(
     labels = scipy.sparse.load_npz(os.path.join(dataset_dir, "y.npz")).toarray()
     labels = np.reshape(labels, -1)
     obs = pd.DataFrame(data=labels,columns=["label"])
-    print(obs)
     adata = ad.AnnData(counts, obs=obs)
     # And add a label based on the activity and identity programs generates
     adata.obs['label_str'] = [f'class_{x}' for x in adata.obs['label']]
