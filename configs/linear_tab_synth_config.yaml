@@ -1,5 +1,5 @@
 trials: 5
-results_dir: "results/tabular_synth/identity_synth"
+results_dir: "results/tabular_synth/linear_synth"
 dataset: "synth_tab_linear"
 shared_params:
     # Experiment setup

@@ -1,3 +1,8 @@
+"""
+The code in this file related to the Gaussian copula sampling is taken
+from https://github.com/chl8856/SEFS. All credit given to Lee et al. for their
+SEFS work.
+"""
 
 import concepts_xai.evaluation.metrics.completeness as completeness
 import numpy as np
@@ -6,9 +11,6 @@ import scipy
 
 def log(x):
     return tf.math.log(x + 1e-6)
-
-def div(x, y):
-    return tf.div(x, (y + 1e-6))
 
 def Gaussian_CDF(x): #change from erf function
     return 0.5 * (1. + tf.math.erf(x / tf.math.sqrt(2.)))
