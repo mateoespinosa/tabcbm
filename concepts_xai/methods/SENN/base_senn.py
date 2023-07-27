@@ -1,4 +1,10 @@
 """
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
+
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
+"""
 Tensorflow implementation of Self-Explaining Neural Networks (SENN) by
 Alvarez-Melis and Jaakkola (NeurIPS 2018) [1].
 
@@ -125,7 +131,7 @@ class SelfExplainingNN(tf.keras.Model):
         # This will allow us to compute the task specific loss
         inputs = data_adapter.expand_1d(inputs)
         x, y, sample_weight = data_adapter.unpack_x_y_sample_weight(inputs)
-        
+
         with tf.GradientTape() as outter_tape:
             total_loss = 0
             # Do a nesting of tapes as we will need to compute gradients and

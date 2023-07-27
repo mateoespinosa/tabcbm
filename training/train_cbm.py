@@ -10,10 +10,7 @@ import joblib
 import copy
 from keras import backend as K
 import logging
-from concepts_xai.methods.CBM.CBModel import (
-    JointConceptBottleneckModel,
-    BypassJointCBM,
-)
+from concepts_xai.methods.CBM.CBModel import JointConceptBottleneckModel
 import training.representation_evaluation as representation_evaluation
 import training.utils as utils
 
@@ -41,7 +38,7 @@ def train_cbm(
     end_results = trial_results if trial_results is not None else {}
     old_results = (old_results or {}) if load_from_cache else {}
     verbosity = experiment_config.get("verbosity", 0)
-    
+
     # Proceed to do and end-to-end model in case we want to
     # do some task-specific pretraining
     n_concepts = experiment_config['n_concepts']
@@ -69,7 +66,7 @@ def train_cbm(
             num_outputs=experiment_config["num_outputs"],
         ),
     )
-    
+
     encoder_path = os.path.join(
         experiment_config["results_dir"],
         f"models/pretrained_encoder{extra_name}"
@@ -78,7 +75,10 @@ def train_cbm(
     if experiment_config.get('pretrain_epochs') and load_from_cache and (
         os.path.exists(encoder_path)
     ):
-        logging.debug(prefix + "Found encoder/decoder models serialized! We will unload them into the end-to-end model!")
+        logging.debug(
+            prefix + "Found encoder/decoder models serialized! We will " +
+            "unload them into the end-to-end model!"
+        )
         # Then time to load up the end-to-end model!
         encoder = tf.keras.models.load_model(encoder_path)
         decoder = tf.keras.models.load_model(decoder_path)
@@ -111,7 +111,7 @@ def train_cbm(
             )
             if experiment_config.get('save_history', True):
                 callbacks = [
-                    early_stopping_monitor,                 
+                    early_stopping_monitor,
                     tf.keras.callbacks.CSVLogger(
                         os.path.join(
                             experiment_config["results_dir"],
@@ -142,7 +142,7 @@ def train_cbm(
     else:
         pretrain_epochs_trained = old_results.get('pretrained_epochs_trained')
         pretrain_time_trained = old_results.get('pretrained_time_trained')
-        
+
     logging.info(prefix + "\tEvaluating end-to-end pretrained model")
     if experiment_config["num_outputs"] > 1:
         preds = scipy.special.softmax(
@@ -172,20 +172,21 @@ def train_cbm(
             end_to_end_model.predict(x_test),
         )
     logging.debug(
-        prefix + f"\t\tPretrained model task accuracy: {end_results['pre_train_acc']*100:.2f}%"
+        prefix + f"\t\tPretrained model task accuracy: " +
+        f"{end_results['pre_train_acc']*100:.2f}%"
     )
     logging.debug(
         prefix +
         f"\t\tPretrained model params: "
         f"{np.sum([np.prod(K.get_value(p).shape) for p in end_to_end_model.trainable_weights])}"
     )
-    
+
     cbm_model_path = os.path.join(
         experiment_config["results_dir"],
         f"models/cbm{extra_name}_weights/"
     )
     Path(cbm_model_path).mkdir(parents=True, exist_ok=True)
-    
+
     if experiment_config.get('lr_schedule_decay', False):
         optimizer_gen = lambda: tf.keras.optimizers.Adam(
             tf.keras.optimizers.schedules.ExponentialDecay(
@@ -201,7 +202,7 @@ def train_cbm(
         optimizer_gen = lambda: tf.keras.optimizers.Adam(
             experiment_config.get("learning_rate", 1e-3),
         )
-    
+
     if (
         (experiment_config.get("n_supervised_concepts", 0) != 0) and
         (len(experiment_config.get('supervised_concept_idxs', [])) > 0)
@@ -230,7 +231,7 @@ def train_cbm(
     else:
         y_train_tensors = y_train
         c_train_real = c_train
-    
+
     # Now time to construct our CBM model
     cbm = JointConceptBottleneckModel(
         encoder=encoder,
@@ -249,7 +250,7 @@ def train_cbm(
         ]
     )
     cbm.compile(optimizer=optimizer_gen())
-    
+
     if load_from_cache and os.path.exists(
         os.path.join(cbm_model_path, 'checkpoint')
     ):
@@ -261,7 +262,7 @@ def train_cbm(
         cbm(x_test[:2, :])
         cbm.load_weights(os.path.join(cbm_model_path, 'checkpoint'))
         cbm.compile(optimizer=optimizer_gen())
-    
+
         cbm_time_trained = old_results.get('time_trained')
         cbm_epochs_trained = old_results.get('epochs_trained')
     else:
@@ -299,7 +300,7 @@ def train_cbm(
             ]
         else:
             callbacks = [early_stopping_monitor]
-        
+
         cbm_hist, cbm_time_trained = utils.timeit(
             cbm.fit,
             x=x_train,
@@ -324,7 +325,7 @@ def train_cbm(
         prefix +
         f"\tNumber of CBM trainable parameters = {end_results['num_params']}"
     )
-    
+
     # Log training times and whatnot
     if pretrained_epochs_trained is not None:
         end_results['pretrained_epochs_trained'] = pretrained_epochs_trained
@@ -371,11 +372,11 @@ def train_cbm(
             y_test,
             test_output,
         )
-    
+
     logging.debug(
         prefix + f"\t\tAccuracy is {end_results['acc']*100:.2f}%"
     )
-    
+
     if (
         (experiment_config.get("n_supervised_concepts", 0) != 0) and
         (len(experiment_config.get('supervised_concept_idxs', [])) > 0)
@@ -396,8 +397,8 @@ def train_cbm(
             prefix +
             f"\t\tMean Concept AUC is {end_results['avg_concept_auc']*100:.2f}%"
         )
-    
-    
+
+
     if (c_train is not None) and (c_test is not None):
         _, train_concept_scores = cbm(x_train)
         if isinstance(train_concept_scores, list):
@@ -408,7 +409,7 @@ def train_cbm(
             scores=train_concept_scores,
             c_train=c_train,
         )
-        
+
         representation_evaluation.evaluate_concept_representations(
             end_results=end_results,
             experiment_config=experiment_config,
@@ -419,7 +420,7 @@ def train_cbm(
             load_from_cache=load_from_cache,
             prefix=prefix,
         )
-        
+
         if experiment_config.get('perform_interventions', True):
             # Then time to do some interventions!
             logging.debug(prefix + f"\t\tPerforming concept interventions")
@@ -447,11 +448,14 @@ def train_cbm(
 
                 selected_concepts_idxs = np.array(
                     list(range(experiment_config['n_concepts']))
-                )[selected_concepts]        
-                corresponding_real_concepts = corresponding_real_concepts[selected_concepts]
+                )[selected_concepts]
+                corresponding_real_concepts = \
+                    corresponding_real_concepts[selected_concepts]
 
-                end_results[f'interveneable_concepts_{thresh}'] = np.sum(selected_concepts)
-                interveneable_concepts = end_results[f'interveneable_concepts_{thresh}']
+                end_results[f'interveneable_concepts_{thresh}'] = \
+                    np.sum(selected_concepts)
+                interveneable_concepts = \
+                    end_results[f'interveneable_concepts_{thresh}']
                 logging.debug(
                     prefix + f"\t\t\tNumber of concepts we will intervene on " +
                     f"is {interveneable_concepts}/{experiment_config['n_concepts']}"
@@ -503,12 +507,14 @@ def train_cbm(
                     )
                     logging.debug(
                         prefix +
-                        f"\t\t\tIntervention accuracy with {num_intervened_concepts} "
-                        f"concepts (thresh = {thresh} with {interveneable_concepts} interveneable concepts): {end_results[key] * 100:.2f}%"
+                        f"\t\t\tIntervention accuracy with "
+                        f"{num_intervened_concepts} concepts (thresh = "
+                        f"{thresh} with {interveneable_concepts} interveneable "
+                        f"concepts): {end_results[key] * 100:.2f}%"
                     )
                     if thresh == threshs[-1]:
                          end_results[f'acc_intervention_{num_intervened_concepts}'] = end_results[key]
-        
+
     if return_model:
         return end_results, cbm
     return end_results

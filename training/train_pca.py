@@ -7,7 +7,6 @@ import joblib
 
 from sklearn.decomposition import PCA
 import training.utils as utils
-import tensorflow as tf
 import training.representation_evaluation as representation_evaluation
 
 from sklearn.model_selection import train_test_split
@@ -40,7 +39,7 @@ def train_pca(
     utils.restart_seeds(seed)
     end_results = trial_results if trial_results is not None else {}
     old_results = (old_results or {}) if load_from_cache else {}
-    
+
     pca_model = PCA(n_components=experiment_config['n_concepts'])
     _, pca_time_trained = utils.timeit(
         pca_model.fit,
@@ -78,7 +77,7 @@ def train_pca(
             load_from_cache=load_from_cache,
             prefix=prefix,
         )
-    
+
     if return_model:
         return end_results, bst
     return end_results

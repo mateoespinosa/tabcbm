@@ -1,8 +1,13 @@
+"""
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
+
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
 import concepts_xai.evaluation.metrics.completeness as completeness
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras.backend as K
-import scipy
 
 '''
 Re-implementation of the "On Completeness-aware Concept-Based Explanations in
@@ -578,7 +583,7 @@ class InterpretableNonlinearModule(tf.keras.layers.Layer):
         self,
         n_concepts,
         g_model=None,
-        
+
         rec_model=None,
         rec_strength=0.5,
         rec_loss_fn=tf.keras.losses.mean_squared_error,

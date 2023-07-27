@@ -46,11 +46,11 @@ def train_ccd(
         -1 if experiment_config.get("data_format", "channels_last") == "channels_last"
         else 1
     )
-    
+
     end_results = trial_results if trial_results is not None else {}
     old_results = (old_results or {}) if load_from_cache else {}
     verbosity = experiment_config.get("verbosity", 0)
-    
+
     if experiment_config["num_outputs"] < 2:
         acc_fn = lambda y_true, y_pred: sklearn.metrics.roc_auc_score(
             y_true,
@@ -61,7 +61,7 @@ def train_ccd(
             y_true,
             np.argmax(y_pred, axis=-1),
         )
-    
+
     # Proceed to do and end-to-end model in case we want to
     # do some task-specific pretraining
     end_to_end_model, encoder, decoder = models.construct_end_to_end_model(
@@ -83,7 +83,7 @@ def train_ccd(
             num_outputs=experiment_config["num_outputs"],
         ),
     )
-    
+
     encoder_path = os.path.join(
         experiment_config["results_dir"],
         f"models/encoder{extra_name}"
@@ -93,7 +93,11 @@ def train_ccd(
         f"models/decoder{extra_name}"
     )
     if load_from_cache and os.path.exists(encoder_path):
-        logging.debug(prefix + "Found encoder/decoder models serialized! We will unload them into the end-to-end model!")
+        logging.debug(
+            prefix +
+            "Found encoder/decoder models serialized! We will unload them " +
+            "into the end-to-end model!"
+        )
         # Then time to load up the end-to-end model!
         encoder = tf.keras.models.load_model(encoder_path)
         decoder = tf.keras.models.load_model(decoder_path)
@@ -124,7 +128,7 @@ def train_ccd(
         )
         if experiment_config.get('save_history', True):
             callbacks = [
-                early_stopping_monitor,                 
+                early_stopping_monitor,
                 tf.keras.callbacks.CSVLogger(
                     os.path.join(
                         experiment_config["results_dir"],
@@ -152,7 +156,7 @@ def train_ccd(
         encoder.save(encoder_path)
         decoder.save(decoder_path)
         logging.debug(prefix + "\tModel pre-training completed")
-            
+
     logging.info(prefix + "\tEvaluating end-to-end pretrained model")
     end_to_end_preds = end_to_end_model.predict(
         x_test,
@@ -190,8 +194,11 @@ def train_ccd(
             y_test,
             (end_to_end_preds >= 0.5).astype(np.int32),
         )
-    logging.debug(prefix + f"\t\tPretrained model task accuracy: {end_results['pre_train_acc']*100:.2f}%")
-    
+    logging.debug(
+        prefix + f"\t\tPretrained model task accuracy: "
+        f"{end_results['pre_train_acc']*100:.2f}%"
+    )
+
     # Now extract our concept vectors
     def derp(y_true, y_pred):
         return tf.keras.metrics.binary_accuracy(
@@ -240,7 +247,7 @@ def train_ccd(
             experiment_config.get("learning_rate", 1e-3),
         )
     )
-    
+
     # See if we can load it
     ccd_g_model_path = os.path.join(
         experiment_config["results_dir"],
@@ -273,7 +280,7 @@ def train_ccd(
         )
         if experiment_config.get('save_history', True):
             callbacks = [
-                early_stopping_monitor,                 
+                early_stopping_monitor,
                 tf.keras.callbacks.CSVLogger(
                     os.path.join(
                         experiment_config["results_dir"],
@@ -317,7 +324,7 @@ def train_ccd(
         np.sum([np.prod(p.shape) for p in topic_model.trainable_weights])
     )
     logging.debug(prefix + f"\tNumber of TopicModel trainable parameters = {end_results['num_params']}")
-    
+
     # Log training times and whatnot
     if end_to_end_epochs_trained is not None:
         end_results['pretrained_epochs_trained'] = end_to_end_epochs_trained
@@ -371,7 +378,7 @@ def train_ccd(
             y_test,
             (preds >= 0.5).astype(np.int32),
         )
-    
+
     # Compute the CAS score
     if (not experiment_config.get('continuous_concepts', False)) and (
         c_test is not None
@@ -386,7 +393,7 @@ def train_ccd(
             load_from_cache=load_from_cache,
             prefix=prefix,
         )
-    
+
     # Let's see our topic model's completeness
     logging.debug(prefix + f"\t\tComputing CCD's completeness scores...")
     end_results['completeness']= utils.posible_load(
@@ -415,7 +422,7 @@ def train_ccd(
             },
         )[0],
     )
-    
+
     end_results['direct_completeness'] = utils.posible_load(
         key='direct_completeness',
         old_results=old_results,
@@ -441,7 +448,7 @@ def train_ccd(
             },
         )[0],
     )
-    
+
     if return_model:
         return end_results, topic_model
     return end_results

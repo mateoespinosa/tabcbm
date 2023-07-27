@@ -1,11 +1,6 @@
-import sklearn
-import scipy
 import tensorflow as tf
-import numpy as np
 import concepts_xai.methods.SENN.base_senn as SENN
 import concepts_xai.methods.SENN.aggregators as aggregators
-import concepts_xai.methods.VAE.betaVAE as beta_vae
-import concepts_xai.methods.VAE.losses as vae_losses
 
 def replace_with_embedding(
     input_tensor,
@@ -89,7 +84,7 @@ def construct_encoder(
             center=False,
             scale=False,
         )(encoder_compute_graph)
-    
+
     # Include the fully connected bottleneck here
     for i, units in enumerate(units):
         encoder_compute_graph = tf.keras.layers.Dense(
@@ -105,14 +100,14 @@ def construct_encoder(
                 center=True,
                 scale=False,  # False as this will be merged into the upcoming fully FC layer
             )(encoder_compute_graph)
-    
+
     # TIme to generate the latent code here
     encoder_compute_graph = tf.keras.layers.Dense(
         latent_dims,
         activation=latent_act,
         name="encoder_bypass_channel",
     )(encoder_compute_graph)
-    
+
     encoder = tf.keras.Model(
         encoder_inputs,
         encoder_compute_graph,
@@ -282,7 +277,6 @@ def construct_vae_decoder(
 
 def get_reconstruction_fn(concept_decoder):
     def reconstruction_loss_fn(y_true, y_pred):
-        #return vae_losses.bernoulli_fn_wrapper()(y_true, concept_decoder(y_pred))
         return tf.reduce_sum(
             tf.square(y_true - concept_decoder(y_pred)),
             [-1]

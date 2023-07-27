@@ -1,5 +1,10 @@
-import os
+"""
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
 
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
+import os
 import PIL
 import numpy as np
 import scipy.io as sio

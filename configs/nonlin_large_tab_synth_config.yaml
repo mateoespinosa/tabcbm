@@ -1,5 +1,5 @@
 trials: 5
-results_dir: "/homes/me466/tmp_tabcbm_results/tabular_synth/nonlin_synth_complex"
+results_dir: "results/tabular_synth/nonlin_synth_complex"
 dataset: "synth_tab_nonlinear_large"
 shared_params:
     # Experiment setup
@@ -33,7 +33,7 @@ shared_params:
 runs:
     - model: 'PCA'
       n_concepts: "{{n_ground_truth_concepts}}"
-    
+
     - model: 'TabTransformer'
       mlp_hidden_mults: [16, 16, 16]
       patience: 250
@@ -43,7 +43,7 @@ runs:
       encoder_units: [16, 16]
       n_latent_acts: 16
       emb_size: 8
-      concept_loss_weight: [5] #0.1, 1, 5]
+      concept_loss_weight: [0.1, 1, 5]
       n_supervised_concepts: [1, 2, 3, 4, 5]
       concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
       n_concepts: "{{n_supervised_concepts}}"
@@ -62,7 +62,7 @@ runs:
       pretrain_epochs: 100
       include_bn: True
       pass_concept_logits: False
-      concept_loss_weight: [5] # Values tried during hyper-parameter tunning: [0.1, 1, 5]
+      concept_loss_weight: [0.1, 1, 5]
       n_supervised_concepts: [1, 2, 3, 4, 5]
       concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
       n_concepts: "{{n_ground_truth_concepts}}"
@@ -74,13 +74,13 @@ runs:
           - concept_supervision_annotated_fraction
           - concept_loss_weight
       grid_search_mode: exhaustive
-    
-      
+
+
     - model: 'CBM'
       pretrain_epochs: 100
       include_bn: True
       pass_concept_logits: False
-      concept_loss_weight: [5] # Values tried during hyper-parameter tunning: [0.1, 1, 5]
+      concept_loss_weight: [0.1, 1, 5]
       n_supervised_concepts: [1, 2, 3, 4, 5]
       concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
       n_concepts: "{{n_supervised_concepts}}"
@@ -92,7 +92,7 @@ runs:
           - concept_supervision_annotated_fraction
           - concept_loss_weight
       grid_search_mode: exhaustive
-   
+
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
@@ -117,8 +117,8 @@ runs:
       early_stop_metric_pretrain: "val_loss"
       early_stop_mode_pretrain: "min"
       patience: .inf
-     
-    
+
+
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
@@ -146,7 +146,7 @@ runs:
       grid_variables:
           - n_concepts
       grid_search_mode: exhaustive
-    
+
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
@@ -173,7 +173,7 @@ runs:
       patience: .inf
       n_supervised_concepts: [1, 2, 3, 4, 5]
       concept_supervision_annotated_fraction: [0.25, 0.5, 0.75, 1]
-      concept_prediction_weight: [5] ## Values tried during hyper-parameter tunning: [0.01, 0.1, 1, 5, 10, 100]
+      concept_prediction_weight: [0.01, 0.1, 1, 5, 10, 100]
       grid_variables:
           - n_supervised_concepts
           - concept_supervision_annotated_fraction
@@ -181,7 +181,7 @@ runs:
       grid_search_mode: exhaustive
 
 
-    
+
     - model: 'TabNet'
       pretrain_epochs: 100
       n_d: 8
@@ -234,7 +234,7 @@ runs:
       grid_variables:
           - max_depth
       grid_search_mode: exhaustive
-  
+
     - model: 'LightGBM'
       extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
       aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"

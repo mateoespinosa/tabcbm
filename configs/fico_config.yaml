@@ -36,7 +36,7 @@ runs:
     - model: 'TabTransformer'
       mlp_hidden_mults: [32, 32, 32, 16, 16]
       early_stop_metric: 'val_y_accuracy'
-      
+
     - model: 'MLP'
       latent_act: 'relu'
       include_bn: True
@@ -61,7 +61,7 @@ runs:
       grid_variables:
           - max_depth
       grid_search_mode: exhaustive
-  
+
     - model: 'LightGBM'
       extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
       aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
@@ -74,7 +74,7 @@ runs:
           - max_depth
           - num_leaves
       grid_search_mode: paired
-      
+
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
@@ -100,14 +100,14 @@ runs:
       weight_used_2: [10, 1, 0.1, 0.01]
       include_bn: True
       lr_schedule_decay: True
-      concept_generator_units: [16] #[64]
-      rec_model_units: [16] #[64]
+      concept_generator_units: [16]
+      rec_model_units: [16]
       grid_variables:
           - n_concepts
           - weight_used_1
           - weight_used_2
       grid_search_mode: exhaustive
-  
+
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
@@ -142,7 +142,7 @@ runs:
           - weight_used_1
           - weight_used_2
       grid_search_mode: exhaustive
-  
+
     - model: 'TabNet'
       pretrain_epochs: [100, 100]
       n_d: [96, 32]
@@ -166,9 +166,9 @@ runs:
           - extra_name
       grid_search_mode: paired
 
-    
+
     - model: 'SENN'
-      pretrain_autoencoder_epochs: 0 # Before 04/03/23: 0 #100 Having trouble with pretraining instabilities here
+      pretrain_autoencoder_epochs: 100
       regularization_strength: [0.01, 0.1]
       sparsity_strength: [2.0E-5, 2.0E-3]
       coefficient_model_units: [300, 300]
@@ -181,7 +181,7 @@ runs:
           - sparsity_strength
       grid_search_mode: exhaustive
       early_stop_metric: "val_sparse_top_k_categorical_accuracy"
-      
+
     - model: 'CCD'
       pretrain_epochs: 100
       include_bn: True
@@ -191,14 +191,14 @@ runs:
       extra_name: "k_{n_concepts}_lambda1_{lambda1}__lambda2_{lambda2}"
       lambda1: [0.1, 1]
       lambda2: [0.1, 1]
-      top_k: null # Before 04/03/23: 2048
+      top_k: null
       threshold: 0.0
       grid_variables:
           - n_concepts
           - lambda1
           - lambda2
       grid_search_mode: exhaustive
-  
+
 
 
 

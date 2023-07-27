@@ -118,7 +118,7 @@ class Attention(nn.Module):
 
     def forward(self, x):
         h = self.heads
-        
+
         q, k, v = self.to_qkv(x).chunk(3, dim = -1)
         q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), (q, k, v))
         sim = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale
@@ -207,7 +207,7 @@ class TabTransformer(pl.LightningModule):
         self.weight_decay = weight_decay
         self.learning_rate = learning_rate
         self.momentum = momentum
-        
+
         # categories related calculations
         self.num_categories = len(categories)
         self.num_unique_categories = sum(categories)
@@ -255,16 +255,16 @@ class TabTransformer(pl.LightningModule):
         all_dimensions = [input_size, *hidden_dimensions, dim_out]
 
         self.mlp = MLP(all_dimensions, act = mlp_act)
-        
+
         # loss
         self.loss_task = (
             torch.nn.CrossEntropyLoss()
             if dim_out > 1 else torch.nn.BCEWithLogitsLoss()
         )
-    
+
     def _unpack_batch(self, batch):
         return batch[0], batch[1]
-    
+
     def forward(self, x_input):
         concat_list = []
         if self.cat_idxs:
@@ -290,7 +290,7 @@ class TabTransformer(pl.LightningModule):
 
         x = torch.cat(concat_list, dim = -1)
         return self.mlp(x)
-    
+
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         x, y = self._unpack_batch(batch)
         return self(x)
@@ -315,7 +315,7 @@ class TabTransformer(pl.LightningModule):
             "loss": loss.detach(),
         }
         return loss, result
-    
+
     def training_step(self, batch, batch_no):
         loss, result = self._run_step(batch, batch_no, train=True)
         for name, val in result.items():

@@ -56,7 +56,7 @@ def initialize_result_directory(results_dir):
             "models",
         )
     ).mkdir(parents=True, exist_ok=True)
-    
+
     Path(
         os.path.join(
             results_dir,
@@ -104,7 +104,7 @@ def _generate_hyperatemer_configs(config):
             current[var_name] = new_val
         result.append(current)
     return result
-                
+
 
 ############################################
 ## Main Experiment Loop
@@ -137,7 +137,7 @@ def experiment_loop(
     )
     loglevel = os.environ['LOGLEVEL']
     logging.info(f'Setting log level to: "{loglevel}"')
-    
+
     rerun_models = list(map(lambda x: x.strip().lower(), os.environ.get('RERUN_MODELS', "").split(",")))
     retrain_models = list(map(lambda x: x.strip().lower(), os.environ.get('RETRAIN_MODELS', "").split(",")))
     # We will accumulate all results in a table for easier reading
@@ -175,7 +175,7 @@ def experiment_loop(
     # We will accumulate all results from all trials into this
     # dictionary so that we can later reduce them to compute their means/etc
     end_results = defaultdict(list)
-    
+
     if data_generator is not None and x_train is not None:
         raise ValueError(
             'Either (x_train, x_test, y_train, y_test, c_train, c_test) is provided or '
@@ -193,7 +193,7 @@ def experiment_loop(
             '(x_train, x_test, y_train, y_test) arguments to be '
             'explicitly provided'
         )
-    
+
     # And time to iterate over all trials
     base_results_dir = experiment_config["results_dir"]
     partial_results = defaultdict(list)
@@ -232,7 +232,7 @@ def experiment_loop(
                 )
             logging.debug(f"\tDone!")
 
-            
+
         logging.debug(f"\tx_train shape is {x_train.shape} and type is {x_train.dtype}")
         logging.debug(f"\tx_test shape is {x_test.shape} and type is {x_test.dtype}")
         logging.debug(f"\ty_train shape is {y_train.shape} and type is {y_train.dtype}")
@@ -255,7 +255,7 @@ def experiment_loop(
             logging.info(
                 f"\tTest concept distribution: {np.mean(c_test, axis=0)}"
             )
-        
+
         # See if there are any dimensions that we know are
         # categorical
         if cat_features_fn is not None:
@@ -290,8 +290,8 @@ def experiment_loop(
                 len(set(y_train)) if len(set(y_train)) > 2 else 1,
             )
             logging.debug(f"\tNumber of outputs is: {trial_config['num_outputs']}")
-            
-                                              
+
+
             trial_config.update(current_config)
             trial_config.update(extra_hypers)
             # Now time to iterate over all hyperparameters that were given as part
@@ -383,7 +383,7 @@ def experiment_loop(
                 run_config["results_dir"] = os.path.join(base_results_dir, arch)
                 initialize_result_directory(run_config["results_dir"])
 
-                
+
                 # Now time to actually train things and see what comes out
                 # of this
                 extra_name = run_config.get('extra_name', "").format(**run_config)
@@ -394,9 +394,9 @@ def experiment_loop(
                     f"\tRunning Trial {trial + 1}/{experiment_config['trials']} "
                     f"for {arch}{extra_name} starting {now.strftime('%d/%m/%Y at %H:%M:%S')}:"
                 )
-                
+
                 utils.print_gpu_usage()
-                
+
                 # Serialize the configuration we will be using for these experiments
                 joblib.dump(
                     run_config,
@@ -436,7 +436,7 @@ def experiment_loop(
                     np.save(path, concept_idxs)
                     run_config['supervised_concept_idxs'] = concept_idxs
                     logging.debug(f"\tSupervising on concepts {concept_idxs}")
-                
+
                 force_rerun = run_config.get('force_rerun', False) or (
                     run_config['model'].lower() in retrain_models
                 )
@@ -589,7 +589,7 @@ def experiment_loop(
             "results.joblib",
         ),
     )
-    
+
     # Also serialize the results
     with open(os.path.join(base_results_dir, "output_table.txt"), "w") as f:
         f.write(str(results_table))

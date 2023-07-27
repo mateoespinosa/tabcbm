@@ -1,3 +1,9 @@
+"""
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
+
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
 import numpy as np
 
 def total_mispredictions_fn(c_true, c_pred):

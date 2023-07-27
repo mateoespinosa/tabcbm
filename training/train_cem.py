@@ -27,8 +27,8 @@ class MLP(pl.LightningModule):
             all_layers.append(
                 torch.nn.BatchNorm1d(num_features=curr_size)
             )
-        for acts in units[:-1]: 
-            all_layers.extend([torch.nn.Linear(curr_size, acts), torch.nn.ReLU()]) 
+        for acts in units[:-1]:
+            all_layers.extend([torch.nn.Linear(curr_size, acts), torch.nn.ReLU()])
             if include_bn:
                 all_layers.append(
                     torch.nn.BatchNorm1d(num_features=acts)
@@ -41,7 +41,7 @@ class MLP(pl.LightningModule):
     def forward(self, x):
         return self.model(x)
 
-    
+
 ############################################
 ## CEM Training
 ############################################
@@ -66,7 +66,7 @@ def train_cem(
     end_results = trial_results if trial_results is not None else {}
     old_results = (old_results or {}) if load_from_cache else {}
     verbosity = experiment_config.get("verbosity", 0)
-    
+
     # Proceed to do and end-to-end model in case we want to
     # do some task-specific pretraining
     n_concepts = experiment_config['n_concepts']
@@ -74,7 +74,7 @@ def train_cem(
         "n_supervised_concepts",
         n_concepts,
     )
-    
+
     def c_extractor_arch(output_dim):
         return MLP(
             units=experiment_config["encoder_units"] + [output_dim],
@@ -82,7 +82,7 @@ def train_cem(
             include_bn=experiment_config.get("include_bn", False),
         )
 
-    
+
     if (
         (experiment_config.get("n_supervised_concepts", 0) != 0) and
         (len(experiment_config.get('supervised_concept_idxs', [])) > 0)
@@ -109,7 +109,7 @@ def train_cem(
             c_train_real[selected_samples, i] = c_train[selected_samples, idx]
     else:
         c_train_real = c_train
-    
+
     # Now time to construct our CEM model
     cem_params = dict(
         n_concepts=n_concepts,
@@ -124,7 +124,7 @@ def train_cem(
         top_k_accuracy=None,
     )
     cem = ConceptEmbeddingModel(**cem_params)
-        
+
     callbacks = []
     if experiment_config.get("patience", float("inf")) not in [
         None,
@@ -143,7 +143,7 @@ def train_cem(
             patience=experiment_config["patience"],
         )
         callbacks = [early_stop]
-        
+
     trainer = pl.Trainer(
         gpus=int(torch.cuda.is_available()),
         max_epochs=experiment_config['max_epochs'],
@@ -151,14 +151,14 @@ def train_cem(
         callbacks=callbacks,
         logger=True,
     )
-    
+
     cem_model_path = os.path.join(
         experiment_config["results_dir"],
         f"models"
     )
     Path(cem_model_path).mkdir(parents=True, exist_ok=True)
     cem_model_path = os.path.join(cem_model_path, f'cem{extra_name}_end.pt')
-    
+
     if experiment_config["holdout_fraction"]:
         if (c_train_real is not None) and (c_test is not None):
             x_train, x_val, y_train, y_val, c_train_real, c_val_real, c_train, c_val = train_test_split(
@@ -193,8 +193,8 @@ def train_cem(
         val_dl = None
     if (c_train_real is not None):
         train_data = torch.utils.data.TensorDataset(
-            torch.cuda.FloatTensor(x_train), 
-            torch.cuda.FloatTensor(y_train), 
+            torch.cuda.FloatTensor(x_train),
+            torch.cuda.FloatTensor(y_train),
             torch.cuda.FloatTensor(c_train_real),
         )
     else:
@@ -215,7 +215,7 @@ def train_cem(
         cem_time_trained = old_results.get('time_trained')
         cem_epochs_trained = old_results.get('epochs_trained')
     else:
-        
+
         # Else it is time to train it
         _, cem_time_trained = utils.timeit(
             trainer.fit,
@@ -237,7 +237,7 @@ def train_cem(
             cem.state_dict(),
             cem_model_path,
         )
-       
+
     end_results['num_params'] = sum([
         p.numel() for p in cem.parameters()
         if p.requires_grad
@@ -246,7 +246,7 @@ def train_cem(
         prefix +
         f"\tNumber of CEM trainable parameters = {end_results['num_params']}"
     )
-    
+
     # Log training times and whatnot
     if cem_epochs_trained is not None:
         end_results['epochs_trained'] = cem_epochs_trained
@@ -269,7 +269,7 @@ def train_cem(
         test_data,
         batch_size=experiment_config["batch_size"],
     )
-    
+
     logging.info(prefix + "\tEvaluating CEM")
     test_output = trainer.predict(cem, test_dl)
     test_concept_probs = np.concatenate(
@@ -314,11 +314,11 @@ def train_cem(
             y_test,
             test_output,
         )
-    
+
     logging.debug(
         prefix + f"\t\tAccuracy is {end_results['acc']*100:.2f}%"
     )
-    
+
     if (
         (experiment_config.get("n_supervised_concepts", 0) != 0) and
         (len(experiment_config.get('supervised_concept_idxs', [])) > 0)
@@ -339,8 +339,8 @@ def train_cem(
             prefix +
             f"\t\tMean Concept AUC is {end_results['avg_concept_auc']*100:.2f}%"
         )
-    
-    
+
+
     if (c_train is not None) and (c_test is not None):
         train_concept_probs = trainer.predict(
             cem,
@@ -351,11 +351,12 @@ def train_cem(
             axis=0,
         )
         logging.debug(prefix + f"\t\tComputing best independent concept aligment...")
-        end_results['best_independent_alignment'], end_results['best_ind_alignment_auc'] = metrics.find_best_independent_alignment(
-            scores=train_concept_probs,
-            c_train=c_train,
-        )
-        
+        end_results['best_independent_alignment'], end_results['best_ind_alignment_auc'] = \
+            metrics.find_best_independent_alignment(
+                scores=train_concept_probs,
+                c_train=c_train,
+            )
+
         representation_evaluation.evaluate_concept_representations(
             end_results=end_results,
             experiment_config=experiment_config,
@@ -366,7 +367,7 @@ def train_cem(
             load_from_cache=load_from_cache,
             prefix=prefix,
         )
-        
+
         if experiment_config.get('perform_interventions', True):
             # Then time to do some interventions!
             logging.debug(prefix + f"\t\tPerforming concept interventions")
@@ -394,7 +395,7 @@ def train_cem(
 
                 selected_concepts_idxs = np.array(
                     list(range(experiment_config['n_concepts']))
-                )[selected_concepts]        
+                )[selected_concepts]
                 corresponding_real_concepts = corresponding_real_concepts[selected_concepts]
 
                 end_results[f'interveneable_concepts_{thresh}'] = np.sum(selected_concepts)
@@ -449,7 +450,7 @@ def train_cem(
                     )
                     if thresh == threshs[-1]:
                          end_results[f'acc_intervention_{num_intervened_concepts}'] = end_results[key]
-        
+
     if return_model:
         return end_results, cem
     return end_results

@@ -1,3 +1,9 @@
+"""
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
+
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
 from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import GradientBoostingClassifier

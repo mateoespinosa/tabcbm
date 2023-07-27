@@ -1,4 +1,10 @@
 """
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
+
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
+"""
 Module containing implementations for Concept Bottleneck Models (CBMs) as
 described by Koh et al. in https://arxiv.org/abs/2007.04612
 """

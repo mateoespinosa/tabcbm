@@ -2,7 +2,6 @@ import sklearn
 import scipy
 import tensorflow as tf
 import numpy as np
-import metrics
 import os
 import models.models as models
 import concepts_xai.methods.VAE.betaVAE as beta_vae
@@ -52,8 +51,8 @@ def train_senn(
     end_results = trial_results if trial_results is not None else {}
     old_results = (old_results or {}) if load_from_cache else {}
     verbosity = experiment_config.get("verbosity", 0)
-    
-    
+
+
     # Proceed to do and end-to-end model in case we want to
     # do some task-specific pretraining
     concept_encoder, vae_encoder = models.construct_senn_encoder(
@@ -187,7 +186,7 @@ def train_senn(
         )
         if experiment_config.get('save_history', True):
             callbacks = [
-                early_stopping_monitor,                 
+                early_stopping_monitor,
                 tf.keras.callbacks.CSVLogger(
                     os.path.join(
                         experiment_config["results_dir"],
@@ -234,7 +233,7 @@ def train_senn(
         test_output,
         x_test_theta_class_scores,
     )
-    
+
     # Compute the model's accuracies
     logging.debug(prefix + "\t\tComputing accuracies...")
     if max(experiment_config["num_outputs"], 2) > 1:
@@ -266,7 +265,7 @@ def train_senn(
             y_test,
             test_output,
         )
-    
+
     representation_evaluation.evaluate_concept_representations(
         end_results=end_results,
         experiment_config=experiment_config,
@@ -277,9 +276,8 @@ def train_senn(
         load_from_cache=load_from_cache,
         prefix=prefix,
     )
-        
+
     logging.debug(prefix + "\t\tDone with evaluation...")
     if return_model:
         return end_results, senn_model
     return end_results
-    

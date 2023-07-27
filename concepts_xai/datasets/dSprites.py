@@ -1,3 +1,9 @@
+"""
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
+
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
 '''
 See https://github.com/deepmind/dsprites-dataset/blob/master/dsprites_reloading_example.ipynb
 for a nice overview.

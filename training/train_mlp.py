@@ -2,8 +2,6 @@ import sklearn
 import scipy
 import tensorflow as tf
 import numpy as np
-from collections import defaultdict
-import metrics
 import os
 import models.models as models
 import logging
@@ -35,7 +33,7 @@ def train_mlp(
     end_results =  trial_results if trial_results is not None else {}
     old_results = (old_results or {}) if load_from_cache else {}
     verbosity = experiment_config.get("verbosity", 0)
-    
+
     # Proceed to do and end-to-end model in case we want to
     # do some task-specific pretraining
     end_to_end_model, _, _ = models.construct_end_to_end_model(
@@ -57,7 +55,7 @@ def train_mlp(
             num_outputs=experiment_config["num_outputs"],
         ),
     )
-    
+
     end_to_end_model_path = os.path.join(
         experiment_config["results_dir"],
         f"models/model{extra_name}"
@@ -86,7 +84,7 @@ def train_mlp(
         )
         if experiment_config.get('save_history', True):
             callbacks = [
-                early_stopping_monitor,                 
+                early_stopping_monitor,
                 tf.keras.callbacks.CSVLogger(
                     os.path.join(
                         experiment_config["results_dir"],
@@ -113,7 +111,7 @@ def train_mlp(
         end_to_end_epochs_trained = len(end_to_end_hist.history['loss'])
         end_to_end_model.save(end_to_end_model_path)
         logging.debug(prefix + "\tMLP training completed")
-        
+
     end_results['num_params'] = (
         np.sum([np.prod(p.shape) for p in end_to_end_model.trainable_weights])
     )
@@ -152,13 +150,13 @@ def train_mlp(
             y_test,
             (preds >= 0.5).astype(np.int32),
         )
-    
+
     # Log training times and whatnot
     if end_to_end_epochs_trained is not None:
         end_results['epochs_trained'] = end_to_end_epochs_trained
     if end_to_end_time_trained is not None:
         end_results['time_trained'] = end_to_end_time_trained
-    
+
     if return_model:
         return end_results, end_to_end_model
     return end_results

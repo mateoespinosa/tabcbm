@@ -1,23 +1,25 @@
 import sys
 sys.path.append('.')
+
+import io
+import joblib
+import logging
+import metrics
+import numpy as np
+import os
+import shutil
 import sklearn
 import tensorflow as tf
-import numpy as np
-import metrics
-import os
+import torch
+import training.utils as utils
+import zipfile
 
 from pathlib import Path
-import joblib
+from tabnet.pretraining import TabNetPretrainer
+from tabnet.tab_model import TabNetClassifier
 from sklearn.model_selection import train_test_split
-from local_pytorch_tabnet.tab_model import TabNetClassifier
-from local_pytorch_tabnet.pretraining import TabNetPretrainer
-import torch
-import shutil
-import zipfile
-import copy
-import logging
 
-import training.utils as utils
+
 
 ############################################
 ## Utils
@@ -157,7 +159,7 @@ def train_tabnet(
 #         scheduler_fn=torch.optim.lr_scheduler.StepLR,
         verbose=verbosity,
     )
-    
+
     tabnet_path = os.path.join(
         experiment_config["results_dir"],
         f"models/tabnet{extra_name}"
@@ -193,7 +195,7 @@ def train_tabnet(
             eval_set = [(x_val, y_val)]
         else:
             eval_set = []
-        
+
         extra_params = dict(
             batch_size=experiment_config["batch_size"],
             virtual_batch_size=experiment_config["virtual_batch_size"],
@@ -220,22 +222,22 @@ def train_tabnet(
                 p.numel() for p in pretrained_model.network.parameters()
                 if p.requires_grad
             ])
-            
+
             if experiment_config.get("patience", float("inf")) not in [None, 0, float("inf")]:
                 pretrain_epochs_trained = len(
                     pretrained_model._callback_container.callbacks[0].history["loss"]
                 )
             else:
                 pretrain_epochs_trained = experiment_config["pretrain_epochs"]
-            
+
             extra_params["from_unsupervised"] = pretrained_model
-            
+
             logging.debug(prefix + "\tDone!")
         else:
             pretrain_epochs_trained = None
             pretrain_time_trained = 0
         logging.info(prefix + "TabNet main model training...")
-        
+
         tabnet = TabNetClassifier(**tabnet_params)
         _, time_trained = utils.timeit(
             tabnet.fit,
@@ -264,7 +266,7 @@ def train_tabnet(
             epochs_trained = experiment_config["max_epochs"]
         save_tabnet_model(tabnet, tabnet_path)
         logging.debug(prefix + "\tDone!")
-    
+
     if 'pretrain_num_parameters' not in end_results and load_from_cache and (
         'pretrain_num_parameters' in old_results
     ):
@@ -306,7 +308,7 @@ def train_tabnet(
             y_test,
             preds,
         )
-    
+
     # Evaluating TabNet's feature importance prediction
     if (ground_truth_concept_masks is not None) and (c_train is not None) and (
         c_test is not None
@@ -337,7 +339,7 @@ def train_tabnet(
         end_results['epochs_trained'] = epochs_trained
     if time_trained is not None:
         end_results['time_trained'] = time_trained
-    
+
     if pretrain_epochs_trained is not None:
         end_results['pretrain_epochs_trained'] = pretrain_epochs_trained
     if pretrain_time_trained is not None:

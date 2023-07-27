@@ -23,7 +23,7 @@ def print_gpu_usage():
             f"{info.total}(total), {info.free} (free), {info.used} (used)"
         )
     nvidia_smi.nvmlShutdown()
-    
+
 def posible_load(
     key,
     run_fn,
@@ -33,7 +33,7 @@ def posible_load(
     keys = key
     if not isinstance(keys, (list, tuple)):
         keys = [key]
-    
+
     if os.environ.get("RERUN_METRICS", ""):
         metrics_to_rerun = os.environ.get("RERUN_METRICS", "")
         metrics_to_rerun = list(map(
@@ -45,7 +45,7 @@ def posible_load(
                 # Then let's overwrite the load from cache
                 load_from_cache = False
                 break
-        
+
     if old_results and load_from_cache:
         result = []
         for k in keys:
@@ -71,7 +71,7 @@ def restart_seeds(trial=0):
     random.seed(42 + trial)
     # And also let's reduce the noise from warnings
     warnings.filterwarnings('ignore')
-    
+
     # Reset the logging in case we are using a subprocess
     print("\tSetting log level to:", os.environ.get('LOGLEVEL', 'WARNING').upper())
     logging.getLogger().setLevel(

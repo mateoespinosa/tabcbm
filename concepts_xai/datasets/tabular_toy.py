@@ -1,3 +1,9 @@
+"""
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
+
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
 '''
 Implements the tabular toy dataset defined by Mahinpei et al. in "Promises and
 Pitfalls of Black-Box Concept Learning Models" (found in

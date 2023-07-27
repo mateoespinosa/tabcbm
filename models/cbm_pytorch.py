@@ -1,6 +1,8 @@
-# Modified from: https://github.com/mateoespinosa/cem/blob/main/cem/models/cbm.py
-# Credit goes to Espinosa Zarlenga et al. for their open implementation of their
-# "Concept Embedding Models" paper for NeurIPS 2022
+"""
+Modified from: https://github.com/mateoespinosa/cem/blob/main/cem/models/cbm.py
+Credit goes to Espinosa Zarlenga et al. for their open implementation of their
+"Concept Embedding Models" paper for NeurIPS 2022
+"""
 
 import sklearn.metrics
 import torch
@@ -19,7 +21,7 @@ def compute_bin_accuracy(c_pred, y_pred, c_true, y_true):
     y_pred = y_probs > 0.5
     c_true = c_true.reshape(-1).cpu().detach()
     y_true = y_true.reshape(-1).cpu().detach()
-    c_accuracy = 0.0 
+    c_accuracy = 0.0
     c_auc = 0.0
     c_f1 = 0.0
     seen_concepts = 0
@@ -70,7 +72,7 @@ def compute_accuracy(
     y_pred = y_pred.argmax(dim=-1).cpu().detach()
     c_true = c_true.cpu().detach()
     y_true = y_true.reshape(-1).cpu().detach()
-    c_accuracy = 0.0 
+    c_accuracy = 0.0
     c_auc = 0.0
     c_f1 = 0.0
     seen_concepts = 0

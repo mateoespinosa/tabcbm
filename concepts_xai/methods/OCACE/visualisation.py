@@ -1,3 +1,9 @@
+"""
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
+
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
 import matplotlib.pyplot as plt
 
 import numpy as np

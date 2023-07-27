@@ -21,7 +21,7 @@ shared_params:
     # Training variables
     batch_size: 1024
     virtual_batch_size: 1024
-    top_k: null # Before 04/03/23: 512
+    top_k: null
     max_epochs: 1500
     learning_rate: 1.0E-3
     patience: 250
@@ -36,9 +36,8 @@ shared_params:
 
 runs:
     - model: 'TabTransformer'
-#       mlp_hidden_mults: [128, 64, 32, 8, 16, 16]
       mlp_hidden_mults: [16, 16, 16, 16, 16]
-      
+
     - model: 'TabCBM'
       early_stop_metric: "val_sparse_top_k_categorical_accuracy"
       early_stop_mode: "max"
@@ -58,18 +57,18 @@ runs:
       temperature: 1
       aggr_key: "{model} (smaller k={n_concepts}, latent={latent_dims}, w={weight_used})"
       extra_name: "smaller_k_{n_concepts}_latent_{latent_dims}_weight_{weight_used}"
-      force_generator_inclusion: True #False
+      force_generator_inclusion: True
       weight_used: [0.1, 0.01]
       include_bn: True
       lr_schedule_decay: True
-      efficient_self_supervised: False #True
-      concept_generator_units: [32, 16] #[32] #, 64]
-      rec_model_units: [16] #, 64]
+      efficient_self_supervised: False
+      concept_generator_units: [32, 16]
+      rec_model_units: [16]
       grid_variables:
           - n_concepts
           - weight_used
       grid_search_mode: exhaustive
-  
+
 
     - model: 'TabNet'
       pretrain_epochs: [0]
@@ -108,7 +107,7 @@ runs:
       grid_variables:
           - max_depth
       grid_search_mode: exhaustive
-  
+
     - model: 'LightGBM'
       extra_name: 'max_depth_{max_depth}_epochs_{max_epochs}'
       aggr_key: "{model} (d={max_depth}, epochs={max_epochs})"
@@ -121,11 +120,11 @@ runs:
           - max_depth
           - num_leaves
       grid_search_mode: paired
-    
+
     - model: 'SENN'
       pretrain_autoencoder_epochs: 50
-      regularization_strength: [0.1] # Tried: [0.01, 0.1]
-      sparsity_strength: [2.0E-5] #Tried: [2.0E-5, 2.0E-3]
+      regularization_strength: [0.01, 0.1]
+      sparsity_strength: [2.0E-5, 2.0E-3]
       coefficient_model_units: [300, 300]
       aggr_key: "{model} (k={n_concepts}, pre_train={pretrain_autoencoder_epochs}, reg={regularization_strength}, sparsity={sparsity_strength})"
       extra_name: "k_{n_concepts}_pre_train_{pretrain_autoencoder_epochs}_reg_{regularization_strength}_sparsity_{sparsity_strength}"
@@ -134,15 +133,15 @@ runs:
           - regularization_strength
           - sparsity_strength
       grid_search_mode: exhaustive
-      
+
     - model: 'CCD'
       pretrain_epochs: 150
       include_bn: True
       n_concepts: [8, 6, 4]
       aggr_key: "{model} (k={n_concepts}, lambda1={lambda1}, lambda2={lambda2})"
       extra_name: "k_{n_concepts}_lambda1_{lambda1}__lambda2_{lambda2}"
-      lambda1: [0.1] #Tried: [0.1, 1]
-      lambda2: [0.1] # Tried: [0.1, 1]
+      lambda1: [0.1, 1]
+      lambda2: [0.1, 1]
       threshold: 0.0
       grid_variables:
           - n_concepts
@@ -150,7 +149,7 @@ runs:
           - lambda2
       grid_search_mode: exhaustive
 
-  
+
 
 
 

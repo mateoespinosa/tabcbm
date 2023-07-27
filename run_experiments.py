@@ -1,19 +1,17 @@
-import sklearn
-import scipy
-import tensorflow as tf
-import numpy as np
-from collections import defaultdict
-import training.train_funcs as train_funcs
-import os
-import yaml
-from pytorch_lightning import seed_everything
-import logging
 import argparse
-import sys
-import warnings
-import datasets as data
+import data.datasets as data
+import logging
+import numpy as np
+import os
 import random
+import sys
+import tensorflow as tf
+import training.train_funcs as train_funcs
+import warnings
+import yaml
+
 from pathlib import Path
+from pytorch_lightning import seed_everything
 
 ################################################################################
 ## HELPER FUNCTIONS
@@ -186,7 +184,7 @@ def main(
     multiprocess_inference=True,
     **kwargs,
 ):
-    
+
     ############################################################################
     ## Setup
     ############################################################################
@@ -196,14 +194,14 @@ def main(
     tf.random.set_seed(42)
     np.random.seed(42)
     random.seed(42)
-    
+
     if suppress_warnings:
         tf.data.experimental.enable_debug_mode()
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
         warnings.filterwarnings('ignore')
         tf.get_logger().setLevel('FATAL')
-        
-    
+
+
 
     ############################################################################
     ## Load the config
@@ -220,7 +218,7 @@ def main(
         # else we start with a blank state and all other arguments must be
         # provided through the command line
         experiment_config = {}
-        
+
     # Update it with possible args passed in the command line
     extend_with_global_params(
         experiment_config,
@@ -234,7 +232,7 @@ def main(
                 f'"{old}" to "{output_dir}"'
             )
         experiment_config['results_dir'] = output_dir
-    
+
     # Validate result
     validate_config(
         experiment_config,
@@ -251,7 +249,7 @@ def main(
     with open(os.path.join(experiment_config['results_dir'], "command.txt"), "w") as f:
         args = [arg if " " not in arg else f'"{arg}"' for arg in sys.argv]
         f.write("python " + " ".join(args))
-    
+
     ############################################################################
     ## Load the config
     ############################################################################
@@ -275,13 +273,13 @@ def main(
     logging.basicConfig(
         format='[%(levelname)s] %(message)s'
     )
-    
+
     fh = logging.FileHandler(
         os.path.join(experiment_config['results_dir'], 'output.log')
     )
     fh.setLevel(debug_level)
     logger.addHandler(fh)
-    
+
     ############################################################################
     ## Dataset Generation
     ############################################################################
@@ -309,11 +307,11 @@ def main(
     else:
         used = experiment_config['dataset']
         raise ValueError(f'Unrecognized dataset name "{used}"')
-    
+
     # Also save a ready-to-use config for recreation purposes
     with open(os.path.join(experiment_config['results_dir'], 'rerun_config.yaml'), "w") as f:
         yaml.dump(experiment_config, f)
-    
+
     ############################################################################
     ## Time to actually run things
     ############################################################################

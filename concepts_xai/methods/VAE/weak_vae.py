@@ -1,3 +1,9 @@
+"""
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
+
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
 import tensorflow as tf
 from concepts_xai.methods.VAE.baseVAE import BaseVAE, compute_gaussian_kl
 

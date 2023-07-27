@@ -41,13 +41,13 @@ def train_xgboost(
     end_results = trial_results if trial_results is not None else {}
     old_results = (old_results or {}) if load_from_cache else {}
     verbosity = experiment_config.get("verbosity", 0)
-    
-    
+
+
     model_path = os.path.join(
         experiment_config["results_dir"],
         f"models/weights{extra_name}.model"
     )
-    
+
     params = dict(
         max_depth=experiment_config.get('max_depth', 6),
         eta=experiment_config.get('learning_rate', 0.3),
@@ -65,7 +65,7 @@ def train_xgboost(
     )
     if experiment_config.get('patience', None) not in [None, 0, float("inf")]:
         params['num_early_stopping_rounds'] = experiment_config['patience']
-    
+
     if load_from_cache and os.path.exists(model_path):
         logging.debug(prefix + "Found XGBoost model serialized! Loading it...")
         bst = xgb.Booster(params)
@@ -110,7 +110,7 @@ def train_xgboost(
         )
         logging.debug(prefix + "\tXGBoost training completed")
         xgboost_epochs_trained = len(hist['train']['merror'])
-        
+
         if experiment_config.get('save_history', True):
             joblib.dump(
                 hist,
@@ -122,10 +122,10 @@ def train_xgboost(
                     )
                 ),
             )
-        
+
         logging.debug(prefix + "\tSerializing model")
         bst.save_model(model_path)
-    
+
     # Log training times and whatnot
     if xgboost_epochs_trained is not None:
         end_results['epochs_trained'] = xgboost_epochs_trained
@@ -144,7 +144,7 @@ def train_xgboost(
         test_output,
         multi_class='ovo',
     )
-    
+
     if (ground_truth_concept_masks is not None) and (c_train is not None) and (
         c_test is not None
     ):
@@ -173,7 +173,7 @@ def train_xgboost(
             if method == 'weight':
                 end_results[f'feat_selection'] = end_results[f'feat_selection_{method}']
             logging.debug(prefix + f"\t\t\tDone: {end_results[f'feat_selection_{method}']:.5f}")
-    
+
     if return_model:
         return end_results, bst
     return end_results
@@ -205,13 +205,13 @@ def train_lightgbm(
     end_results = trial_results if trial_results is not None else {}
     old_results = (old_results or {}) if load_from_cache else {}
     verbosity = experiment_config.get("verbosity", 0)
-    
-    
+
+
     model_path = os.path.join(
         experiment_config["results_dir"],
         f"models/weights{extra_name}.model"
     )
-    
+
     num_class = len(np.unique(y_train))
     if num_class <= 2:
         num_class = 2
@@ -231,7 +231,7 @@ def train_lightgbm(
 #             if experiment_config["num_outputs"] > 1 else
 #             'auc_mu'
         ),
-            
+
         seed=seed,
         num_iterations=experiment_config['max_epochs'],
         verbosity=verbosity,
@@ -240,7 +240,7 @@ def train_lightgbm(
 #         gpu_platform_id=0,
 #         gpu_device_id=0,
     )
-    
+
     if load_from_cache and os.path.exists(model_path):
         logging.debug(prefix + "Found LightGBM model serialized! Loading it...")
         bst = lgb.Booster(params, model_file=model_path)
@@ -288,13 +288,13 @@ def train_lightgbm(
             epochs_trained = bst.best_iteration
         else:
             epochs_trained = experiment_config['max_epochs']
-        
+
         logging.debug(prefix + "\tSerializing model")
         if experiment_config.get('patience', None) not in [None, 0, float("inf")]:
             bst.save_model(model_path, num_iteration=bst.best_iteration)
         else:
             bst.save_model(model_path)
-    
+
     # Log training times and whatnot
     if epochs_trained is not None:
         end_results['epochs_trained'] = epochs_trained
@@ -315,11 +315,11 @@ def train_lightgbm(
         test_output,
         multi_class='ovo',
     )
-    
+
     if (ground_truth_concept_masks is not None) and (c_train is not None) and (
         c_test is not None
     ):
-        
+
         for method in ["split", "gain"]:
             if experiment_config.get('patience', None) not in [None, 0, float("inf")]:
                 global_mask = bst.feature_importance(

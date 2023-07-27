@@ -4,7 +4,6 @@ import scipy
 import logging
 import sklearn
 import training.utils as utils
-import tensorflow as tf
 
 def evaluate_concept_representations(
     end_results,
@@ -36,8 +35,8 @@ def evaluate_concept_representations(
             prefix +
             f"\t\tMean Concept AUC is {end_results['avg_concept_auc']*100:.2f}%"
         )
-    
-    
+
+
     if c_test is None:
         # Then nothing else to do in here
         return
@@ -55,8 +54,10 @@ def evaluate_concept_representations(
                 step=experiment_config.get('cas_step', 2),
             ),
         )
-        logging.debug(prefix + f"\t\t\tDone with CAS = {end_results['cas'] * 100:.2f}%")
-    
+        logging.debug(
+            prefix + f"\t\t\tDone with CAS = {end_results['cas'] * 100:.2f}%"
+        )
+
         # Now compute MIG
         logging.debug(prefix + "\t\tComputing MIG...")
         end_results['mig'] = utils.posible_load(
@@ -69,8 +70,10 @@ def evaluate_concept_representations(
                 bins=experiment_config.get('num_bins', 10)
             ),
         )
-        logging.debug(prefix + f"\t\t\tDone with MIG = {end_results['mig'] * 100:.2f}%")
-        
+        logging.debug(
+            prefix + f"\t\t\tDone with MIG = {end_results['mig'] * 100:.2f}%"
+        )
+
         # Now compute SAP
         logging.debug(prefix + "\t\tComputing SAP...")
         end_results['sap'] = utils.posible_load(
@@ -82,8 +85,10 @@ def evaluate_concept_representations(
                 Z=test_concept_scores,
             ),
         )
-        logging.debug(prefix + f"\t\t\tDone with SAP = {end_results['sap'] * 100:.2f}%")
-        
+        logging.debug(
+            prefix + f"\t\t\tDone with SAP = {end_results['sap'] * 100:.2f}%"
+        )
+
         # And go for FactorVAE
         logging.debug(prefix + "\t\tComputing FactorVAE Scores...")
         end_results['factor_vae'] = utils.posible_load(
@@ -101,8 +106,10 @@ def evaluate_concept_representations(
                 num_variance_estimate=int(test_concept_scores.shape[0] * 0.3),
             ),
         )
-        logging.debug(prefix + f"\t\t\tDone with FactorVAE = {end_results['factor_vae'] * 100:.2f}%")
-        
+        logging.debug(
+            prefix + f"\t\t\tDone with FactorVAE = {end_results['factor_vae'] * 100:.2f}%"
+        )
+
         # Then DCI
         logging.debug(prefix + "\t\tComputing DCI Scores...")
         end_results['dci_disentanglement'], end_results['dci_completeness'], end_results['dci_informativeness'] = utils.posible_load(
@@ -114,10 +121,22 @@ def evaluate_concept_representations(
                 latents=test_concept_scores,
             ),
         )
-        logging.debug(prefix + f"\t\t\tDone DCI disentanglement = {end_results['dci_disentanglement']*100:.2f}%")
-        logging.debug(prefix + f"\t\t\tDone DCI completeness = {end_results['dci_completeness']*100:.2f}%")
-        logging.debug(prefix + f"\t\t\tDone DCI informativeness = {end_results['dci_informativeness']*100:.2f}%")
-        
+        logging.debug(
+            prefix +
+            f"\t\t\tDone DCI disentanglement = "
+            f"{end_results['dci_disentanglement']*100:.2f}%"
+        )
+        logging.debug(
+            prefix +
+            f"\t\t\tDone DCI completeness = "
+            f"{end_results['dci_completeness']*100:.2f}%"
+        )
+        logging.debug(
+            prefix +
+            f"\t\t\tDone DCI informativeness = "
+            f"{end_results['dci_informativeness']*100:.2f}%"
+        )
+
         # R4 Scores
         logging.debug(prefix + "\t\tComputing R4 Score...")
         end_results['r4'] = utils.posible_load(
@@ -129,8 +148,10 @@ def evaluate_concept_representations(
                 Z=test_concept_scores,
             ),
         )
-        logging.debug(prefix + f"\t\t\tDone with R4 = {end_results['r4'] * 100:.2f}%")
-        
+        logging.debug(
+            prefix + f"\t\t\tDone with R4 = {end_results['r4'] * 100:.2f}%"
+        )
+
     # Compute correlation between bottleneck entries and ground truch concepts
     logging.debug(prefix + "\t\tConcept correlation matrix...")
     end_results['concept_corr_mat'] = utils.posible_load(
@@ -143,4 +164,3 @@ def evaluate_concept_representations(
         ),
     )
     logging.debug(prefix + f"\t\t\tDone")
-        

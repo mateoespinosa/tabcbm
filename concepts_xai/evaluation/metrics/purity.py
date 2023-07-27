@@ -1,3 +1,9 @@
+"""
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
+
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
 '''
 Metrics to measure concept purity based on the definition of purity by
 Mahinpei et al.'s "Promises and Pitfalls of Black-Box Concept Learning Models"

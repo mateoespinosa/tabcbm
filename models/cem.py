@@ -1,6 +1,8 @@
-# Taken from: https://github.com/mateoespinosa/cem/blob/main/cem/models/cem.py
-# Credit goes to Espinosa Zarlenga et al. for their open implementation of their
-# "Concept Embedding Models" paper for NeurIPS 2022
+"""
+Taken from: https://github.com/mateoespinosa/cem/blob/main/cem/models/cem.py
+Credit goes to Espinosa Zarlenga et al. for their open implementation of their
+"Concept Embedding Models" paper for NeurIPS 2022
+"""
 
 import torch
 import pytorch_lightning as pl
@@ -68,7 +70,7 @@ class ConceptEmbeddingModel(ConceptBottleneckModel):
             self.pre_concept_model = c_extractor_arch(output_dim=(n_latent_acts or n_concepts))
             num_latent_acts = (n_latent_acts or n_concepts)
         self.training_intervention_prob = training_intervention_prob
-        
+
         if self.training_intervention_prob != 0:
             self.ones = torch.ones(n_concepts)
 

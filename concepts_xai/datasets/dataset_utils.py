@@ -1,3 +1,9 @@
+"""
+Taken from https://github.com/dmitrykazhdan/concept-based-xai.
+
+All credit due to Kazhdan et al. (arXiv:2104.06917).
+"""
+
 import numpy as np
 
 from . import dSprites, shapes3D, smallNorb, cars3D
@@ -13,7 +19,7 @@ Or, can define bases vector B = [b*c, c, 1], and then define D = B.A
 
 Example:
 (1, 0, 1) in bases (2, 2, 2) (i.e. in binary):
-D = (2^0 * 1) + (2^1 * 0) + (2^2 * 1) = 1 + 4 = 5 
+D = (2^0 * 1) + (2^1 * 0) + (2^2 * 1) = 1 + 4 = 5
 '''
 
 def get_latent_bases(latent_sizes):
