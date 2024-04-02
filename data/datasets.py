@@ -1,18 +1,18 @@
-import os
-import scipy
-import tensorflow as tf
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-import pandas as pd
-import scanpy as sc
 import anndata as ad
 import data.scsim as scsim
 import itertools
-from pathlib import Path
 import joblib
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import pandas as pd
+import scanpy as sc
+import scipy
+import tensorflow as tf
 import tensorflow_datasets as tfds
+
+from pathlib import Path
+from sklearn.model_selection import train_test_split
 
 ###################################
 ## Synthetic Tabular Dataset
@@ -623,6 +623,7 @@ def generate_tabular_synth_linear_data(seed):
         n_concepts=2,
         latent_map=lambda x: x,
         plot=False,
+        seed=seed,
     )
     return data, extra_hyperparameters
 
@@ -638,6 +639,7 @@ def generate_tabular_synth_nonlinear_data(seed):
         n_concepts=2,
         latent_map=lambda x: np.sin(x) + x,
         plot=False,
+        seed=seed,
     )
     return data, extra_hyperparameters
 
