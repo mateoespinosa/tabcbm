@@ -25,7 +25,7 @@ shared_params:
     learning_rate: 1.0E-3
     patience: 50
     min_delta: 1.0E-5
-    holdout_fraction: 0.1
+    holdout_fraction: 0.2
     early_stop_metric: "val_loss"
     early_stop_mode: "min"
 
@@ -43,18 +43,10 @@ runs:
     - model: 'TabCBM'
       pretrain_epochs: 25
       self_supervised_train_epochs: 25
-      use_concept_embedding: False
-      end_to_end_training: True
       coherence_reg_weight: 0.1
       diversity_reg_weight: "{{weight_used}}"
       feature_selection_reg_weight: "{{weight_used}}"
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
       top_k: 2048
       n_concepts: [4, 6, 8]
       aggr_key: "{model} (smaller k={n_concepts}, latent={latent_dims}, w={weight_used})"
@@ -62,7 +54,6 @@ runs:
       encoder_units: [1024, 512, 256, 128]
       decoder_units: [32, 16]
       latent_dims: 64
-      force_generator_inclusion: True #False
       weight_used: [0.01, 0.1]
       include_bn: True
       lr_schedule_decay: True

@@ -26,7 +26,7 @@ shared_params:
     learning_rate: 1.0E-3
     patience: 250
     min_delta: 1.0E-5
-    holdout_fraction: 0.1
+    holdout_fraction: 0.2
     early_stop_metric: "val_loss"
     early_stop_mode: "min"
 
@@ -43,25 +43,16 @@ runs:
       early_stop_mode: "max"
       pretrain_epochs: 25
       self_supervised_train_epochs: 25
-      use_concept_embedding: False
-      end_to_end_training: True
       coherence_reg_weight: 0.1
       diversity_reg_weight: "{{weight_used}}"
       feature_selection_reg_weight: "{{weight_used}}"
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
+
       aggr_key: "{model} (smaller k={n_concepts}, latent={latent_dims}, w={weight_used})"
       extra_name: "smaller_k_{n_concepts}_latent_{latent_dims}_weight_{weight_used}"
-      force_generator_inclusion: True
       weight_used: [0.1, 0.01]
       include_bn: True
       lr_schedule_decay: True
-      efficient_self_supervised: False
       concept_generator_units: [32, 16]
       rec_model_units: [16]
       grid_variables:

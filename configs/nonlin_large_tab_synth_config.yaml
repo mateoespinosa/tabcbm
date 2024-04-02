@@ -22,7 +22,7 @@ shared_params:
     learning_rate: 1.0E-3
     patience: 25
     min_delta: 1.0E-5
-    holdout_fraction: 0.1
+    holdout_fraction: 0.2
     early_stop_metric: "val_loss"
     early_stop_mode: "min"
 
@@ -96,18 +96,10 @@ runs:
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
       coherence_reg_weight: 0.1
       diversity_reg_weight: 5
       feature_selection_reg_weight: 5
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
       top_k: 256
       n_concepts: "{{n_ground_truth_concepts}}"
       aggr_key: "{model} (k={n_concepts})"
@@ -122,18 +114,10 @@ runs:
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
       coherence_reg_weight: 0.1
       diversity_reg_weight: 5
       feature_selection_reg_weight: 5
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
       top_k: 256
       n_concepts: [3, 5, 10]
       aggr_key: "{model} (k={n_concepts})"
@@ -150,18 +134,10 @@ runs:
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
       coherence_reg_weight: 0.1
       diversity_reg_weight: 5
       feature_selection_reg_weight: 5
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
       top_k: 256
       n_concepts: "{{n_ground_truth_concepts}}"
       aggr_key: "{model} (k={n_concepts}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction}, concept_weight={concept_prediction_weight})"

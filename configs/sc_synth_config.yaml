@@ -22,7 +22,7 @@ shared_params:
     max_epochs: 3000
     learning_rate: 1.0E-3
     min_delta: 1.0E-5
-    holdout_fraction: 0.1
+    holdout_fraction: 0.2
     early_stop_metric: "val_loss"
     early_stop_mode: "min"
 
@@ -56,20 +56,12 @@ runs:
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
 
       coherence_reg_weight: 1
       diversity_reg_weight: 10
       feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
 
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
       top_k: 102
       n_concepts: "{{n_ground_truth_concepts}}"
       aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, bn={include_bn})"
@@ -84,20 +76,12 @@ runs:
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
 
       coherence_reg_weight: 1
       diversity_reg_weight: 10
       feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
 
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
       top_k: 102
       n_concepts: [6, 11]
       aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, bn={include_bn})"
@@ -112,20 +96,12 @@ runs:
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
 
       coherence_reg_weight: 1
       diversity_reg_weight: 10
       feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
 
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
       top_k: 102
       n_concepts: [17]
       aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, bn={include_bn})"
@@ -143,20 +119,12 @@ runs:
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
 
       coherence_reg_weight: 1
       diversity_reg_weight: 1
       feature_selection_reg_weight: 1
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
 
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
       top_k: 102
       n_concepts: "{{n_ground_truth_concepts}}"
       aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, weights=({coherence_reg_weight}, {diversity_reg_weight}, {feature_selection_reg_weight}), bn={include_bn})"
@@ -171,20 +139,12 @@ runs:
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
 
       coherence_reg_weight: 0
       diversity_reg_weight: 10
       feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
 
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
       top_k: 102
       n_concepts: "{{n_ground_truth_concepts}}"
       aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, weights=({coherence_reg_weight}, {diversity_reg_weight}, {feature_selection_reg_weight}))"
@@ -195,20 +155,12 @@ runs:
     - model: 'TabCBM'
       pretrain_epochs: 100
       self_supervised_train_epochs: 0
-      use_concept_embedding: False
-      end_to_end_training: True
 
       coherence_reg_weight: 1
       diversity_reg_weight: 10
       feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
 
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
       top_k: 102
       n_concepts: "{{n_ground_truth_concepts}}"
       aggr_key: "{model} (no_pretrain, k={n_concepts}, patience={patience}, epochs={max_epochs}, weights=({coherence_reg_weight}, {diversity_reg_weight}, {feature_selection_reg_weight}))"
@@ -219,20 +171,12 @@ runs:
     - model: 'TabCBM'
       pretrain_epochs: 50
       self_supervised_train_epochs: 50
-      use_concept_embedding: False
-      end_to_end_training: True
 
       coherence_reg_weight: 1
       diversity_reg_weight: 10
       feature_selection_reg_weight: 10
-      contrastive_reg_weight: 0
-      prob_diversity_reg_weight: 0
       gate_estimator_weight: 10
 
-      n_exclusive_concepts: 0
-      zero_mask: True
-      normalized_scores: True
-      temperature: 1
       top_k: 102
       n_concepts: "{{n_ground_truth_concepts}}"
       aggr_key: "{model} (k={n_concepts}, patience={patience}, epochs={max_epochs}, supervised_c={n_supervised_concepts}, annotated={concept_supervision_annotated_fraction})"
