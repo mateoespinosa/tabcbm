@@ -205,7 +205,7 @@ def train_tabcbm(
             multi_class='ovo',
         )
     else:
-        if np.min(end_to_end_preds) < 0.0 or np.max(end_to_end_pred) > 1:
+        if np.min(end_to_end_preds) < 0.0 or np.max(end_to_end_preds) > 1:
             # Then we assume that we have outputed logits
             end_to_end_preds = tf.math.sigmoid(end_to_end_preds).numpy()
         end_to_end_preds = (end_to_end_preds >= 0.5).astype(np.int32)
@@ -236,28 +236,19 @@ def train_tabcbm(
         n_supervised_concepts=experiment_config.get('n_supervised_concepts', 0),
         cov_mat=cov_mat,
         mean_inputs=(
-            np.zeros(x_train.shape[1:], dtype=np.float32) if experiment_config["zero_mask"]
-            else np.mean(x_train, axis=0)
+            np.zeros(x_train.shape[1:], dtype=np.float32)
         ),
-        n_exclusive_concepts=experiment_config["n_exclusive_concepts"],
         gate_estimator_weight=experiment_config["gate_estimator_weight"],
 
         threshold=experiment_config.get("threshold", 0),
         loss_fn=end_to_end_model.loss,
         top_k=top_k,
-        temperature=experiment_config["temperature"],
         coherence_reg_weight=experiment_config["coherence_reg_weight"],
         diversity_reg_weight=experiment_config["diversity_reg_weight"],
-        contrastive_reg_weight=experiment_config["contrastive_reg_weight"],
         feature_selection_reg_weight=experiment_config["feature_selection_reg_weight"],
-        prob_diversity_reg_weight=experiment_config["prob_diversity_reg_weight"],
         concept_prediction_weight=experiment_config.get('concept_prediction_weight', 0),
-        feature_budget=experiment_config.get('feature_budget'),
-        feature_budget_weight=experiment_config.get('feature_budget_weight', 0),
         seed=experiment_config.get("seed", None),
         eps=experiment_config.get("eps", 1e-5),
-        end_to_end_training=experiment_config.get('end_to_end_training', False),
-        use_concept_embedding=experiment_config.get("use_concept_embedding", False),
         acc_metric=(
             (
                 lambda y_true, y_pred: tf.math.reduce_mean(tf.keras.metrics.sparse_categorical_accuracy(
@@ -1239,28 +1230,20 @@ def load_tabcbm(
         n_supervised_concepts=experiment_config.get('n_supervised_concepts', 0),
         cov_mat=cov_mat,
         mean_inputs=(
-            np.zeros(x_train.shape[1:], dtype=np.float32) if experiment_config["zero_mask"]
+            np.zeros(x_train.shape[1:], dtype=np.float32)
             else np.mean(x_train, axis=0)
         ),
-        n_exclusive_concepts=experiment_config["n_exclusive_concepts"],
         gate_estimator_weight=experiment_config["gate_estimator_weight"],
 
         threshold=experiment_config.get("threshold", 0),
         loss_fn=end_to_end_model.loss,
         top_k=experiment_config.get("top_k", 32),
-        temperature=experiment_config["temperature"],
         coherence_reg_weight=experiment_config["coherence_reg_weight"],
         diversity_reg_weight=experiment_config["diversity_reg_weight"],
-        contrastive_reg_weight=experiment_config["contrastive_reg_weight"],
         feature_selection_reg_weight=experiment_config["feature_selection_reg_weight"],
-        prob_diversity_reg_weight=experiment_config["prob_diversity_reg_weight"],
         concept_prediction_weight=experiment_config.get('concept_prediction_weight', 0),
-        feature_budget=experiment_config.get('feature_budget'),
-        feature_budget_weight=experiment_config.get('feature_budget_weight', 0),
         seed=experiment_config.get("seed", None),
         eps=experiment_config.get("eps", 1e-5),
-        end_to_end_training=experiment_config.get('end_to_end_training', False),
-        use_concept_embedding=experiment_config.get("use_concept_embedding", False),
         acc_metric=(
             (
                 lambda y_true, y_pred: tf.math.reduce_mean(tf.keras.metrics.sparse_categorical_accuracy(
@@ -1303,28 +1286,20 @@ def load_tabcbm(
         n_supervised_concepts=experiment_config.get('n_supervised_concepts', 0),
         cov_mat=cov_mat,
         mean_inputs=(
-            np.zeros(x_train.shape[1:], dtype=np.float32) if experiment_config["zero_mask"]
+            np.zeros(x_train.shape[1:], dtype=np.float32)
             else np.mean(x_train, axis=0)
         ),
-        n_exclusive_concepts=experiment_config["n_exclusive_concepts"],
         gate_estimator_weight=experiment_config["gate_estimator_weight"],
 
         threshold=experiment_config.get("threshold", 0),
         loss_fn=end_to_end_model.loss,
         top_k=experiment_config.get("top_k", 32),
-        temperature=experiment_config["temperature"],
         coherence_reg_weight=experiment_config["coherence_reg_weight"],
         diversity_reg_weight=experiment_config["diversity_reg_weight"],
-        contrastive_reg_weight=experiment_config["contrastive_reg_weight"],
         feature_selection_reg_weight=experiment_config["feature_selection_reg_weight"],
-        prob_diversity_reg_weight=experiment_config["prob_diversity_reg_weight"],
         concept_prediction_weight=experiment_config.get('concept_prediction_weight', 0),
-        feature_budget=experiment_config.get('feature_budget'),
-        feature_budget_weight=experiment_config.get('feature_budget_weight', 0),
         seed=experiment_config.get("seed", None),
         eps=experiment_config.get("eps", 1e-5),
-        end_to_end_training=experiment_config.get('end_to_end_training', False),
-        use_concept_embedding=experiment_config.get("use_concept_embedding", False),
         acc_metric=(
             (
                 lambda y_true, y_pred: tf.math.reduce_mean(tf.keras.metrics.sparse_categorical_accuracy(
