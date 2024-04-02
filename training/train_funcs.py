@@ -1,31 +1,32 @@
-import tensorflow as tf
+import copy
+import gc
+import itertools
+import joblib
+import logging
+import multiprocessing
 import numpy as np
 import os
-import joblib
+import tensorflow as tf
 import torch
-import copy
-import multiprocessing
-import gc
-import logging
-import itertools
-from datetime import datetime
 
 
 from collections import defaultdict
+from datetime import datetime
 from pathlib import Path
 from prettytable import PrettyTable
 
+import training.utils as utils
+
+from training.train_cbm import train_cbm
 from training.train_ccd import train_ccd
+from training.train_cem import train_cem
 from training.train_gbm import train_xgboost, train_lightgbm
 from training.train_mlp import train_mlp
+from training.train_pca import train_pca
 from training.train_senn import train_senn
 from training.train_tabcbm import train_tabcbm
-from training.train_cbm import train_cbm
 from training.train_tabnet import train_tabnet
-from training.train_pca import train_pca
-from training.train_cem import train_cem
 from training.train_tabtransformer import train_tabtransformer
-import training.utils as utils
 
 ############################################
 ## Utils
@@ -267,7 +268,7 @@ def experiment_loop(
             cat_feat_inds, cat_dims = None, None
         for current_config in experiment_config['runs']:
             if restart_gpu_on_run_trial:
-                device = cuda.get_current_device()
+                device = torch.cuda.get_current_device()
                 device.reset()
             # Construct the config for this particular trial
             trial_config = copy.deepcopy(experiment_config.get('shared_params', {}))
