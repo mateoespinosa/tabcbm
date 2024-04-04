@@ -406,7 +406,7 @@ def train_cbm(
             train_concept_scores = tf.concat(train_concept_scores, axis=-1)
         train_concept_scores = train_concept_scores.numpy()
         logging.debug(prefix + f"\t\tComputing best independent concept aligment...")
-        end_results['best_independent_alignment'], end_results['best_ind_alignment_auc'] = metrics.find_best_independent_alignment(
+        end_results['best_independent_alignment'], end_results['best_ind_alignment_corr'] = metrics.find_best_independent_alignment(
             scores=train_concept_scores,
             c_train=c_train,
         )
@@ -432,7 +432,7 @@ def train_cbm(
             if not isinstance(threshs, list):
                 threshs = [threshs]
             for thresh in threshs:
-                selected_concepts = end_results['best_ind_alignment_auc'] >= thresh
+                selected_concepts = end_results['best_ind_alignment_corr'] >= thresh
                 corresponding_real_concepts = np.array(
                     end_results['best_independent_alignment']
                 )

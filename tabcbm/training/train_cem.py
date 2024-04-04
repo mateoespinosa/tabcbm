@@ -351,7 +351,7 @@ def train_cem(
             axis=0,
         )
         logging.debug(prefix + f"\t\tComputing best independent concept aligment...")
-        end_results['best_independent_alignment'], end_results['best_ind_alignment_auc'] = \
+        end_results['best_independent_alignment'], end_results['best_ind_alignment_corr'] = \
             metrics.find_best_independent_alignment(
                 scores=train_concept_probs,
                 c_train=c_train,
@@ -378,7 +378,7 @@ def train_cem(
             if not isinstance(threshs, list):
                 threshs = [threshs]
             for thresh in threshs:
-                selected_concepts = end_results['best_ind_alignment_auc'] >= thresh
+                selected_concepts = end_results['best_ind_alignment_corr'] >= thresh
                 corresponding_real_concepts = np.array(
                     end_results['best_independent_alignment']
                 )

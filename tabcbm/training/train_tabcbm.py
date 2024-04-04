@@ -237,9 +237,6 @@ def train_tabcbm(
         n_concepts=experiment_config['n_concepts'],
         n_supervised_concepts=experiment_config.get('n_supervised_concepts', 0),
         cov_mat=cov_mat,
-        mean_inputs=(
-            np.zeros(x_train.shape[1:], dtype=np.float32)
-        ),
         gate_estimator_weight=experiment_config["gate_estimator_weight"],
 
         threshold=experiment_config.get("threshold", 0),
@@ -249,7 +246,6 @@ def train_tabcbm(
         diversity_reg_weight=experiment_config["diversity_reg_weight"],
         feature_selection_reg_weight=experiment_config["feature_selection_reg_weight"],
         concept_prediction_weight=experiment_config.get('concept_prediction_weight', 0),
-        seed=experiment_config.get("seed", None),
         eps=experiment_config.get("eps", 1e-5),
         acc_metric=(
             (
@@ -261,8 +257,6 @@ def train_tabcbm(
         ),
         concept_generator_units=experiment_config.get('concept_generator_units', [64]),
         rec_model_units=experiment_config.get('rec_model_units', [64]),
-        force_generator_inclusion=experiment_config.get('force_generator_inclusion', True),
-        efficient_self_supervised=experiment_config.get('efficient_self_supervised', False),
         forward_deterministic=experiment_config.get('forward_deterministic', True),
     )
     tabcbm_model_path = os.path.join(
@@ -324,8 +318,6 @@ def train_tabcbm(
             **tab_cbm_params,
         )
         tabcbm.compile(optimizer=optimizer_gen())
-        if experiment_config.get('force_generator_inclusion', True):
-            tabcbm._compute_self_supervised_loss(x_test[:2, :])
         tabcbm._compute_supervised_loss(
             x_test[:2, :],
             y_test[:2],
@@ -419,38 +411,21 @@ def train_tabcbm(
             tabcbm = ss_tabcbm
         logging.info(prefix + "TabCBM supervised training stage...")
 
-        if experiment_config.get('force_generator_inclusion', True):
-            # Legacy mode where the model always includes the self-supervised stuff
-            tabcbm = TabCBM(
-                self_supervised_mode=False,
-                **tab_cbm_params,
-            )
-            tabcbm.compile(optimizer=optimizer_gen())
-            # Do a dummy call to initialize weights...
-            tabcbm._compute_self_supervised_loss(x_test[:2, :])
-            tabcbm._compute_supervised_loss(
-                x_test[:2, :],
-                y_test[:2],
-                c_true=c_train_real[:2, :] if c_train_real is not None else None,
-            )
-            tabcbm.set_weights(ss_tabcbm.get_weights())
-        else:
-            # else we only need to load the relevant stuff in here
-            tabcbm = TabCBM(
-                self_supervised_mode=False,
-                concept_generators=ss_tabcbm.concept_generators,
-                prior_masks=ss_tabcbm.feature_probabilities,
-                **tab_cbm_params,
-            )
-            tabcbm.compile(optimizer=optimizer_gen())
-            tabcbm._compute_supervised_loss(
-                x_test[:2, :],
-                y_test[:2],
-                c_true=(
-                    c_train_real[:2, :]
-                    if c_train_real is not None else None
-                ),
-            )
+        tabcbm = TabCBM(
+            self_supervised_mode=False,
+            concept_generators=ss_tabcbm.concept_generators,
+            prior_masks=ss_tabcbm.feature_probabilities,
+            **tab_cbm_params,
+        )
+        tabcbm.compile(optimizer=optimizer_gen())
+        tabcbm._compute_supervised_loss(
+            x_test[:2, :],
+            y_test[:2],
+            c_true=(
+                c_train_real[:2, :]
+                if c_train_real is not None else None
+            ),
+        )
         early_stopping_monitor = tf.keras.callbacks.EarlyStopping(
             monitor=experiment_config.get(
                 "early_stop_metric",
@@ -611,11 +586,11 @@ def train_tabcbm(
             batch_size=experiment_config["batch_size"],
         )
         logging.debug(prefix + f"\t\tComputing best independent concept aligment...")
-        end_results['best_independent_alignment'], end_results['best_ind_alignment_auc'] = metrics.find_best_independent_alignment(
+        end_results['best_independent_alignment'], end_results['best_ind_alignment_corr'] = metrics.find_best_independent_alignment(
                 scores=train_concept_scores,
                 c_train=c_train,
             )
-        end_results['best_independent_alignment_binary'], end_results['best_ind_alignment_auc_binary'] = metrics.find_best_independent_alignment(
+        end_results['best_independent_alignment_binary'], end_results['best_ind_alignment_corr_binary'] = metrics.find_best_independent_alignment(
                 scores=(train_concept_scores >= 0.5).astype(np.float32),
                 c_train=c_train,
             )
@@ -650,12 +625,8 @@ def train_tabcbm(
 
 
         n_ground_truth_concepts = c_train.shape[-1]
-        corr_mat = np.corrcoef(
-            np.hstack([train_concept_scores, c_train]).T
-        )[:train_concept_scores.shape[-1], train_concept_scores.shape[-1]:]
-
         for thresh in threshs:
-            selected_concepts = end_results['best_ind_alignment_auc'] >= thresh
+            selected_concepts = end_results['best_ind_alignment_corr'] >= thresh
             corresponding_real_concepts = np.array(
                 end_results['best_independent_alignment']
             )
@@ -854,7 +825,7 @@ def train_tabcbm(
             range(len(experiment_config.get('supervised_concept_idxs', [])))
         )
         for thresh in threshs:
-            selected_concepts = end_results['best_ind_alignment_auc'] >= thresh
+            selected_concepts = end_results['best_ind_alignment_corr'] >= thresh
             for i, selected in enumerate(selected_concepts):
                 if selected and (i in sup_concepts_idxs):
                     # Then turn it off as this was one of the concepts given during supervision!
@@ -1231,9 +1202,6 @@ def load_tabcbm(
         n_concepts=experiment_config['n_concepts'],
         n_supervised_concepts=experiment_config.get('n_supervised_concepts', 0),
         cov_mat=cov_mat,
-        mean_inputs=(
-            np.zeros(x_train.shape[1:], dtype=np.float32)
-        ),
         gate_estimator_weight=experiment_config["gate_estimator_weight"],
 
         threshold=experiment_config.get("threshold", 0),
@@ -1243,7 +1211,6 @@ def load_tabcbm(
         diversity_reg_weight=experiment_config["diversity_reg_weight"],
         feature_selection_reg_weight=experiment_config["feature_selection_reg_weight"],
         concept_prediction_weight=experiment_config.get('concept_prediction_weight', 0),
-        seed=experiment_config.get("seed", None),
         eps=experiment_config.get("eps", 1e-5),
         acc_metric=(
             (
@@ -1255,8 +1222,6 @@ def load_tabcbm(
         ),
         concept_generator_units=experiment_config.get('concept_generator_units', [64]),
         rec_model_units=experiment_config.get('rec_model_units', [64]),
-        force_generator_inclusion=experiment_config.get('force_generator_inclusion', True),
-        efficient_self_supervised=experiment_config.get('efficient_self_supervised', False),
     )
     tabcbm_model_path = os.path.join(
         experiment_config["results_dir"],
@@ -1286,9 +1251,6 @@ def load_tabcbm(
         n_concepts=experiment_config['n_concepts'],
         n_supervised_concepts=experiment_config.get('n_supervised_concepts', 0),
         cov_mat=cov_mat,
-        mean_inputs=(
-            np.zeros(x_train.shape[1:], dtype=np.float32)
-        ),
         gate_estimator_weight=experiment_config["gate_estimator_weight"],
 
         threshold=experiment_config.get("threshold", 0),
@@ -1298,7 +1260,6 @@ def load_tabcbm(
         diversity_reg_weight=experiment_config["diversity_reg_weight"],
         feature_selection_reg_weight=experiment_config["feature_selection_reg_weight"],
         concept_prediction_weight=experiment_config.get('concept_prediction_weight', 0),
-        seed=experiment_config.get("seed", None),
         eps=experiment_config.get("eps", 1e-5),
         acc_metric=(
             (
@@ -1310,8 +1271,6 @@ def load_tabcbm(
         ),
         concept_generator_units=experiment_config.get('concept_generator_units', [64]),
         rec_model_units=experiment_config.get('rec_model_units', [64]),
-        force_generator_inclusion=experiment_config.get('force_generator_inclusion', True),
-        efficient_self_supervised=experiment_config.get('efficient_self_supervised', False),
     )
 
     tabcbm = TabCBM(

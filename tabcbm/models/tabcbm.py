@@ -49,9 +49,9 @@ class TabCBM(tf.keras.Model):
         concepts_to_labels_model,  # The "label predictor" which we call f
         latent_dims,
         n_concepts,
-        mean_inputs,
         features_to_embeddings_model=None,
         cov_mat=None,
+        masking_values=None,
 
         # Self-supervised (SS) related arguments
         # Only set this to true if the SS stage has already been completed
@@ -206,7 +206,9 @@ class TabCBM(tf.keras.Model):
             self.L = scipy.linalg.cholesky(self.cov_mat, lower=True).astype(
                 np.float32
             )
-        self.mean_inputs = mean_inputs
+        if masking_values is None:
+            masking_values = np.zeros(input_shape, dtype=np.float32)
+        self.masking_values = masking_values
         given = concept_generators is not None
         self.concept_generators = concept_generators or []
         self.rec_values_models = []
@@ -371,7 +373,7 @@ class TabCBM(tf.keras.Model):
             # samples in the batch of x
             masked_xs.append(
                 gate_vector * x + (1 - gate_vector) * tf.expand_dims(
-                    self.mean_inputs,
+                    self.masking_values,
                     axis=0,
                 )
             )
@@ -612,7 +614,7 @@ class TabCBM(tf.keras.Model):
             # samples in the batch of x
             masked_x = (
                 mask * x + (1 - mask) * tf.expand_dims(
-                    self.mean_inputs,
+                    self.masking_values,
                     axis=0,
                 )
             )

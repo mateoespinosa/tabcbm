@@ -175,15 +175,7 @@ def brute_force_concept_aucs(
     return result
 
 def find_best_independent_alignment(scores, c_train):
-#     purity_mat = purity.concept_purity_matrix(
-#         c_soft=scores,
-#         c_true=c_train,
-#     )
-#     align = purity.find_max_alignment(purity_mat.T)
-#     return align, purity_mat[list(range(0, scores.shape[-1])), align]
-#     return np.argmax(purity_mat, axis=0), np.max(purity_mat, axis=0)
     n_concepts = scores.shape[-1]
-    n_ground_truth = c_train.shape[-1]
     purity_mat = np.abs(np.corrcoef(np.hstack([scores, c_train]).T)[:n_concepts, n_concepts:])
     return np.argmax(purity_mat, axis=1), np.max(purity_mat, axis=1)
 
